@@ -1,19 +1,8 @@
-# =========================
-# Node / package managers
-# =========================
 node_modules/
 **/node_modules/
 
-# If you use pnpm, the store can be ignored (optional)
 .pnpm-store/
 
-# Lockfiles: usually commit root lockfile; ignore per-package locks if you prefer
-# (Uncomment if you don't want per-package package-locks)
-# packages/*/package-lock.json
-
-# =========================
-# Environment / secrets
-# =========================
 .env
 .env.*.local
 .env.local
@@ -27,9 +16,6 @@ node_modules/
 secrets.json
 keystore.json
 
-# =========================
-# Hardhat / Solidity build
-# =========================
 artifacts/
 cache/
 typechain/
@@ -39,27 +25,19 @@ coverage.json
 solidity-coverage-report/
 hardhat-deploy-temp/
 
-# Hardhat node
 hh-data/
 hhnode/
 
 node_modules/
 **/node_modules/
 
-# OpenZeppelin (if used for upgrades/local forks)
 openzeppelin/
 
-# =========================
-# Subgraph
-# =========================
 subgraph/build/
 subgraph/generated/
 subgraph/abis/*.json    # if you generate ABIs locally; otherwise keep them if you want to commit
 subgraph/node_modules/
 
-# =========================
-# Frontend (Next.js etc.)
-# =========================
 packages/frontend/.next/
 packages/frontend/out/
 packages/frontend/.vercel/
@@ -68,9 +46,6 @@ out/
 .build/
 dist/
 
-# =========================
-# Logs, reports, misc
-# =========================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -81,9 +56,6 @@ reports-**/
 gas-report.txt
 gas-report.csv
 
-# =========================
-# Editor / OS files
-# =========================
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -93,63 +65,40 @@ desktop.ini
 *.sublime-workspace
 *.sublime-project
 
-# mac / linux
 /.DS_Store
 /.Trash
 
-# Windows
 Thumbs.db
 ehthumbs.db
 Icon?
 
-# =========================
-# TypeScript / build outputs
-# =========================
+
 dist/
 build/
 lib/
 tmp/
 temp/
 
-# =========================
-# Testing artifacts & coverage
-# =========================
 coverage/
 .nyc_output/
 mochawesome-report/
 mochawesome.json
 
-# =========================
-# CI artifacts
-# =========================
 *.tgz
 *.cache/
 .github/workflows/artifacts/
 
-# =========================
-# Optional: local deployment / keys / wallets
-# =========================
+
 deployments/local/
 deployments/localhost/
 *.keystore
 *.wallet
 
-# =========================
-# Optional: docker
-# =========================
 docker-compose.override.yml
 Dockerfile.local
 
-# =========================
-# Documentation (generated or temporary)
-# =========================
+
 docs/
 doc/
 documentation/
 *.md.backup
-
-# =========================
-# Keep this file maintained:
-# If you want to commit a file that matches a pattern above, use:
-# git add -f <file>
-# =========================
