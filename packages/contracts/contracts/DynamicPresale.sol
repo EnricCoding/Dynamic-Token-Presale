@@ -73,8 +73,8 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         uint256 maxPerWallet_
     ) Ownable(msg.sender) {
         require(token_ != address(0), "Presale: token address zero");
-        require(softCap_ > 0, "Presale: softCap must be > 0");
-        require(minBuy_ > 0, "Presale: minBuy must be > 0");
+        require(softCap_ > 0, "Presale: softCap must be greater than 0");
+        require(minBuy_ > 0, "Presale: minBuy must be greater than 0");
         require(maxPerWallet_ >= minBuy_, "Presale: maxPerWallet must be >= minBuy");
 
         token = IMyToken(token_);
@@ -115,9 +115,10 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
 
     /// @notice Add a new phase. Only owner can add.
     function addPhase(uint256 priceWei, uint256 supply, uint256 start, uint256 end) external onlyOwner {
-        require(priceWei > 0, "Presale: price must be > 0");
-        require(supply > 0, "Presale: supply must be > 0");
+        require(priceWei > 0, "Presale: price must be greater than 0");
+        require(supply > 0, "Presale: supply must be greater than 0");
         require(start < end, "Presale: invalid phase time");
+        require(start > block.timestamp, "Presale: start time must be in future");
 
         // Disallow overlapping phases
         for (uint256 i = 0; i < phases.length; i++) {

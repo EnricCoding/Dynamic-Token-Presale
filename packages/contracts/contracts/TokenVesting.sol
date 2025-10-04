@@ -80,8 +80,8 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
         require(beneficiary != address(0), "Vesting: beneficiary zero");
         require(totalAmount > 0, "Vesting: zero amount");
         require(duration > 0, "Vesting: zero duration");
-        require(cliff <= duration, "Vesting: cliff > duration");
-        require(start >= block.timestamp, "Vesting: start < now");
+        require(cliff <= duration, "Vesting: cliff greater than duration");
+        require(start >= block.timestamp, "Vesting: start time in past");
 
         // Ensure contract has enough tokens for this new vesting (considering previously committed)
         require(
