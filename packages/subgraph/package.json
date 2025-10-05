@@ -1,0 +1,32 @@
+{
+  "name": "@dynamic-presale/subgraph",
+  "version": "1.0.0",
+  "description": "The Graph subgraph for indexing and querying Dynamic Presale smart contract events",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ dynamic-presale-subgraph",
+    "create-local": "graph create --node http://localhost:8020/ dynamic-presale-subgraph",
+    "remove-local": "graph remove --node http://localhost:8020/ dynamic-presale-subgraph",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 dynamic-presale-subgraph",
+    "test": "graph test"
+  },
+  "keywords": [
+    "the-graph",
+    "subgraph",
+    "presale",
+    "token",
+    "vesting",
+    "ethereum",
+    "web3"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.97.1",
+    "@graphprotocol/graph-ts": "^0.38.1"
+  },
+  "devDependencies": {
+    "matchstick-as": "^0.6.0"
+  }
+}

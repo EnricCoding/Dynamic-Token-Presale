@@ -157,7 +157,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   log(`📄 Deployment info saved to: ${deploymentPath}`);
 };
 
-func.tags = ["DynamicPresaleSystem"];
+func.tags = ["all", "DynamicPresaleSystem"];
 func.dependencies = [];
 
 export default func;

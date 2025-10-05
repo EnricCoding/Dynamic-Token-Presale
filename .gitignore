@@ -1,12 +1,16 @@
+# Dependencies
 node_modules/
 **/node_modules/
-
 .pnpm-store/
+.yarn/
+.npm/
 
+# Environment Variables & Secrets (CRITICAL - NEVER COMMIT)
 .env
-.env.*.local
+.env.*
 .env.local
-.env.example
+.env.*.local
+.env.development
 .env.test
 .env.production
 *.secret
@@ -15,7 +19,15 @@ node_modules/
 *.p12
 secrets.json
 keystore.json
+private-keys.txt
+mnemonic.txt
+wallet.json
 
+# Private keys and sensitive data
+**/private-keys/**
+**/secrets/**
+
+# Hardhat
 artifacts/
 cache/
 typechain/
@@ -24,37 +36,47 @@ coverage/
 coverage.json
 solidity-coverage-report/
 hardhat-deploy-temp/
-
+deployments/local/
+deployments/localhost/
 hh-data/
 hhnode/
 
-node_modules/
-**/node_modules/
-
-openzeppelin/
-
+# Subgraph Generated Files
 subgraph/build/
 subgraph/generated/
-subgraph/abis/*.json    # if you generate ABIs locally; otherwise keep them if you want to commit
-subgraph/node_modules/
+packages/subgraph/build/
+packages/subgraph/generated/
+**/subgraph/build/
+**/subgraph/generated/
 
+# Frontend Build Files
 packages/frontend/.next/
 packages/frontend/out/
 packages/frontend/.vercel/
+packages/frontend/build/
 .next/
 out/
 .build/
 dist/
+build/
 
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 *.log
+packages/contracts/logs_contracts.txt
+logs/
+*.log.*
+
+# Test & Coverage Reports
 reports/
 reports-**/
 gas-report.txt
 gas-report.csv
+test-results/
+junit.xml
 
 .DS_Store
 Thumbs.db
@@ -97,8 +119,25 @@ deployments/localhost/
 docker-compose.override.yml
 Dockerfile.local
 
+# AI-Generated Documentation (Copilot temporary files)
+.azure/
+**/.copilotmd
+*.copilotmd
+**/plan.md
+**/*_plan.md
+**/*-plan.md
+**/migration-summary.md
+**/deployment-summary.md
+**/*.copilot.md
 
-docs/
-doc/
-documentation/
+# Backup files
+*.backup
+*.bak
+*.old
+*.orig
 *.md.backup
+*~
+
+# Deployment artifacts that shouldn't be committed
+deployment-addresses.json
+deployment-info.json

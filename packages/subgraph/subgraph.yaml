@@ -1,0 +1,92 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: DynamicPresale
+    network: sepolia
+    source:
+      address: "0x554BE1651bCe10c4c0B8c48271F28E22fcf81F1b"
+      abi: DynamicPresale
+      startBlock: 9342238
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - User
+        - Phase
+        - Purchase
+        - Claim
+        - Refund
+        - PresaleStats
+      abis:
+        - name: DynamicPresale
+          file: ../contracts/artifacts/contracts/DynamicPresale.sol/DynamicPresale.json
+      eventHandlers:
+        - event: Purchased(indexed address,indexed uint256,uint256,uint256)
+          handler: handlePurchased
+        - event: Claimed(indexed address,uint256)
+          handler: handleClaimed
+        - event: RefundRequested(indexed address,uint256)
+          handler: handleRefundRequested
+        - event: PhaseAdded(indexed uint256,uint256,uint256,uint256,uint256)
+          handler: handlePhaseAdded
+        - event: SoftCapReached(uint256)
+          handler: handleSoftCapReached
+        - event: SaleEnded(bool)
+          handler: handleSaleEnded
+        - event: Withdrawn(indexed address,uint256)
+          handler: handleWithdrawn
+        - event: PaymentsWithdrawn(indexed address,uint256)
+          handler: handlePaymentsWithdrawn
+      file: ./src/dynamic-presale.ts
+
+  - kind: ethereum
+    name: TokenVesting
+    network: sepolia
+    source:
+      address: "0xA77f8949fc69e6B510E88AAAB6f5D84Bc1788838"
+      abi: TokenVesting
+      startBlock: 9342239
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - VestingSchedule
+        - TokenRelease
+        - User
+      abis:
+        - name: TokenVesting
+          file: ../contracts/artifacts/contracts/TokenVesting.sol/TokenVesting.json
+      eventHandlers:
+        - event: VestingCreated(indexed address,indexed uint256,uint256,uint256,uint256,uint256,bool)
+          handler: handleVestingCreated
+        - event: TokensReleased(indexed address,indexed uint256,uint256)
+          handler: handleTokensReleased
+        - event: VestingRevoked(indexed address,indexed uint256,uint256)
+          handler: handleVestingRevoked
+      file: ./src/token-vesting.ts
+
+  - kind: ethereum
+    name: MyToken
+    network: sepolia
+    source:
+      address: "0x554246113d00Fc80bA8457eeD065DC33C92f5331"
+      abi: MyToken
+      startBlock: 9342237
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - User
+        - TokenTransfer
+      abis:
+        - name: MyToken
+          file: ../contracts/artifacts/contracts/MyToken.sol/MyToken.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+      file: ./src/my-token.ts

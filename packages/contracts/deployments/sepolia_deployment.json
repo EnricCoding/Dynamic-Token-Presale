@@ -1,0 +1,42 @@
+{
+  "network": "sepolia",
+  "timestamp": "2025-10-04T16:10:49.946Z",
+  "contracts": {
+    "MyToken": {
+      "address": "0x554246113d00Fc80bA8457eeD065DC33C92f5331",
+      "args": [
+        "Dynamic Presale Token",
+        "DPT",
+        "100000000000000000000000000"
+      ]
+    },
+    "DynamicPresale": {
+      "address": "0x554BE1651bCe10c4c0B8c48271F28E22fcf81F1b",
+      "args": [
+        "0x554246113d00Fc80bA8457eeD065DC33C92f5331",
+        18,
+        "10000000000000000000",
+        "10000000000000000",
+        "20000000000000000000"
+      ]
+    },
+    "TokenVesting": {
+      "address": "0xA77f8949fc69e6B510E88AAAB6f5D84Bc1788838",
+      "args": [
+        "0x554246113d00Fc80bA8457eeD065DC33C92f5331"
+      ]
+    }
+  },
+  "parameters": {
+    "TOKEN_NAME": "Dynamic Presale Token",
+    "TOKEN_SYMBOL": "DPT",
+    "TOKEN_CAP": "100000000000000000000000000",
+    "SOFT_CAP": "10000000000000000000",
+    "MIN_BUY": "10000000000000000",
+    "MAX_PER_WALLET": "20000000000000000000",
+    "PHASE_0_PRICE": "500000000000000",
+    "PHASE_1_PRICE": "1000000000000000",
+    "PHASE_2_PRICE": "2000000000000000",
+    "PHASE_SUPPLY": "100000000000000000000000"
+  }
+}
