@@ -9,21 +9,28 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /// @title MyToken - Professional ERC20 Token for Dynamic Presale
 /// @notice Implements minting, burning, pausing, capping and role-based access control
-/// @dev Uses AccessControl for granular permissions, supports capped supply
+/// @dev Uses AccessControl for granular permissions, supports capped supply (cap must be > 0)
 contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
+    /// @notice Emitted when admin performs an emergency burn from an account
+    event EmergencyBurn(address indexed from, uint256 amount, address indexed admin);
+
     /// @notice Constructor sets name, symbol, cap and initial admin
     /// @param name_ Token name
     /// @param symbol_ Token symbol
-    /// @param cap_ Maximum supply cap (use 0 for unlimited)
+    /// @param cap_ Maximum supply cap (must be > 0). If you need an unlimited supply, do not inherit ERC20Capped.
     constructor(
         string memory name_,
         string memory symbol_,
         uint256 cap_
     ) ERC20(name_, symbol_) ERC20Capped(cap_) {
+        // ERC20Capped's constructor already requires cap_ > 0 (OpenZeppelin).
+        // Keep logic explicit.
+        require(cap_ > 0, "MyToken: cap is 0");
+
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
@@ -32,13 +39,13 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
 
     /// @notice Mint new tokens to an address. Only accounts with MINTER_ROLE can mint.
     /// @param to Address to mint tokens to
-    /// @param amount Amount of tokens to mint
+    /// @param amount Amount of tokens to mint (in base units)
     function mint(
         address to,
         uint256 amount
     ) external onlyRole(MINTER_ROLE) whenNotPaused {
         require(to != address(0), "MyToken: mint to zero address");
-        require(amount > 0, "MyToken: mint amount must be greater than 0");
+        require(amount > 0, "MyToken: mint amount must be > 0");
         _mint(to, amount);
     }
 
@@ -52,14 +59,14 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         _unpause();
     }
 
-    /// @notice Burn tokens from a specific address. Only accounts with BURNER_ROLE can burn from others.
-    /// @param from Address to burn tokens from
-    /// @param amount Amount of tokens to burn
-    function burnFrom(
-        address from,
-        uint256 amount
-    ) public override onlyRole(BURNER_ROLE) {
-        super.burnFrom(from, amount);
+    /// @notice Burn tokens from caller (inherited from ERC20Burnable).
+    /// @dev keep default ERC20Burnable.burn semantics
+
+    /// @notice Allow addresses with BURNER_ROLE to burn tokens from an address without allowance checks.
+    /// @dev This is an admin-style burn for operators with the role.
+    function burnFromByRole(address from, uint256 amount) external onlyRole(BURNER_ROLE) {
+        require(from != address(0), "MyToken: burn from zero address");
+        _burn(from, amount);
     }
 
     /// @notice Emergency burn function for admin. Only DEFAULT_ADMIN_ROLE.
@@ -69,7 +76,9 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         address from,
         uint256 amount
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(from != address(0), "MyToken: burn from zero address");
         _burn(from, amount);
+        emit EmergencyBurn(from, amount, msg.sender);
     }
 
     /// @dev Override _update to respect pause state (OpenZeppelin v5)
@@ -81,7 +90,7 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         super._update(from, to, value);
     }
 
-    /// @dev Required override for AccessControl
+    /// @dev Required override for AccessControl (ERC165)
     function supportsInterface(
         bytes4 interfaceId
     ) public view virtual override(AccessControl) returns (bool) {

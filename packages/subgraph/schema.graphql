@@ -1,7 +1,9 @@
+# Updated schema.graphql (includes escrow/payment indexing and stats)
+
 # User entity - represents any address interacting with the system
 type User @entity(immutable: false) {
   id: ID! # address
-  
+
   # Presale data
   totalContributed: BigInt! # total ETH contributed
   totalTokensPurchased: BigInt! # total tokens purchased
@@ -10,16 +12,20 @@ type User @entity(immutable: false) {
   purchases: [Purchase!]! @derivedFrom(field: "buyer")
   claims: [Claim!]! @derivedFrom(field: "buyer")
   refunds: [Refund!]! @derivedFrom(field: "buyer")
-  
+
+  # Escrow / payments
+  pendingPayments: BigInt! # ETH queued for this user via _asyncTransfer (excess + refunds)
+  paymentsWithdrawn: [PaymentWithdrawal!]! @derivedFrom(field: "payee")
+
   # Vesting data
   vestingSchedules: [VestingSchedule!]! @derivedFrom(field: "beneficiary")
   totalVested: BigInt! # total tokens vested
   totalReleased: BigInt! # total tokens released from vesting
-  
+
   # Token data
   tokenBalance: BigInt! # current token balance
   transfers: [TokenTransfer!]! @derivedFrom(field: "from")
-  
+
   # Metadata
   firstInteractionTimestamp: BigInt!
   lastInteractionTimestamp: BigInt!
@@ -28,23 +34,26 @@ type User @entity(immutable: false) {
 # Global presale statistics
 type PresaleStats @entity(immutable: false) {
   id: ID! # always "1"
-  
+
   totalRaised: BigInt!
   totalTokensSold: BigInt!
   totalBuyers: BigInt!
   softCap: BigInt!
   minBuy: BigInt!
   maxPerWallet: BigInt!
-  
+
   softCapReached: Boolean!
   saleEnded: Boolean!
   saleEndedTimestamp: BigInt
-  
+
   totalPhases: BigInt!
   totalPurchases: BigInt!
   totalClaims: BigInt!
   totalRefunds: BigInt!
-  
+
+  # NEW: total amount (wei) reserved in escrow for buyers (sum of PaymentQueued - PaymentWithdrawal)
+  totalEscrow: BigInt!
+
   lastUpdatedTimestamp: BigInt!
 }
 
@@ -52,19 +61,19 @@ type PresaleStats @entity(immutable: false) {
 type Phase @entity(immutable: false) {
   id: ID! # phaseId as string
   phaseId: BigInt!
-  
+
   priceWei: BigInt!
   supply: BigInt!
   sold: BigInt!
   remaining: BigInt!
   startTime: BigInt!
   endTime: BigInt!
-  
+
   isActive: Boolean!
   isCompleted: Boolean!
-  
+
   purchases: [Purchase!]! @derivedFrom(field: "phase")
-  
+
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
 }
@@ -72,12 +81,12 @@ type Phase @entity(immutable: false) {
 # Purchase event entity
 type Purchase @entity(immutable: true) {
   id: ID! # tx hash + log index
-  
+
   buyer: User!
   phase: Phase!
   ethAmount: BigInt!
   tokensAmount: BigInt!
-  
+
   timestamp: BigInt!
   blockNumber: BigInt!
   transactionHash: Bytes!
@@ -86,10 +95,10 @@ type Purchase @entity(immutable: true) {
 # Claim event entity
 type Claim @entity(immutable: true) {
   id: ID! # tx hash + log index
-  
+
   buyer: User!
   tokensAmount: BigInt!
-  
+
   timestamp: BigInt!
   blockNumber: BigInt!
   transactionHash: Bytes!
@@ -98,21 +107,22 @@ type Claim @entity(immutable: true) {
 # Refund event entity
 type Refund @entity(immutable: true) {
   id: ID! # tx hash + log index
-  
+
   buyer: User!
   ethAmount: BigInt!
-  
+
   timestamp: BigInt!
   blockNumber: BigInt!
   transactionHash: Bytes!
 }
 
-# Withdrawal event (proceeds)
-type Withdrawal @entity(immutable: true) {
+# PaymentQueued event entity (escrowed payments: excess + refunds)
+type PaymentQueued @entity(immutable: true) {
   id: ID! # tx hash + log index
-  
-  beneficiary: Bytes!
+
+  payee: User!
   amount: BigInt!
+  reason: String # optional: "excess" | "refund" (set in mapping)
   
   timestamp: BigInt!
   blockNumber: BigInt!
@@ -122,10 +132,22 @@ type Withdrawal @entity(immutable: true) {
 # Payment withdrawal (excess/refund via pull pattern)
 type PaymentWithdrawal @entity(immutable: true) {
   id: ID! # tx hash + log index
-  
+
   payee: User!
   amount: BigInt!
-  
+
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+# Withdrawal event (proceeds)
+type Withdrawal @entity(immutable: true) {
+  id: ID! # tx hash + log index
+
+  beneficiary: Bytes!
+  amount: BigInt!
+
   timestamp: BigInt!
   blockNumber: BigInt!
   transactionHash: Bytes!
@@ -134,25 +156,25 @@ type PaymentWithdrawal @entity(immutable: true) {
 # Vesting Schedule entity
 type VestingSchedule @entity(immutable: false) {
   id: ID! # beneficiary address + scheduleId
-  
+
   beneficiary: User!
   scheduleId: BigInt!
-  
+
   totalAmount: BigInt!
   released: BigInt!
   remaining: BigInt!
-  
+
   startTime: BigInt!
   duration: BigInt!
   cliff: BigInt!
-  
+
   revocable: Boolean!
   revoked: Boolean!
   revokedAt: BigInt
   revokedAmount: BigInt
-  
+
   releases: [TokenRelease!]! @derivedFrom(field: "schedule")
-  
+
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
   lastReleasedTimestamp: BigInt
@@ -161,11 +183,11 @@ type VestingSchedule @entity(immutable: false) {
 # Token Release event entity
 type TokenRelease @entity(immutable: true) {
   id: ID! # tx hash + log index
-  
+
   beneficiary: User!
   schedule: VestingSchedule!
   amount: BigInt!
-  
+
   timestamp: BigInt!
   blockNumber: BigInt!
   transactionHash: Bytes!
@@ -174,11 +196,11 @@ type TokenRelease @entity(immutable: true) {
 # Token Transfer event entity (optional, for tracking all token movements)
 type TokenTransfer @entity(immutable: true) {
   id: ID! # tx hash + log index
-  
+
   from: User!
   to: User!
   amount: BigInt!
-  
+
   timestamp: BigInt!
   blockNumber: BigInt!
   transactionHash: Bytes!
@@ -187,11 +209,11 @@ type TokenTransfer @entity(immutable: true) {
 # Global vesting statistics
 type VestingStats @entity(immutable: false) {
   id: ID! # always "1"
-  
+
   totalSchedules: BigInt!
   totalCommitted: BigInt!
   totalReleased: BigInt!
   totalRevoked: BigInt!
-  
+
   lastUpdatedTimestamp: BigInt!
 }

@@ -49,9 +49,13 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
     // local escrow (pull-payment) mapping: recipient => wei pending
     mapping(address => uint256) private _escrowPayments;
 
+    // Sum of all escrowed wei pending (keeps invariant to protect funds)
+    uint256 public totalEscrow;
+
     event Purchased(address indexed buyer, uint256 indexed phaseId, uint256 ethAmount, uint256 tokensAmount);
     event Claimed(address indexed buyer, uint256 tokensAmount);
     event RefundRequested(address indexed buyer, uint256 ethAmount);
+    event PaymentQueued(address indexed dest, uint256 amount);
     event PhaseAdded(uint256 indexed phaseId, uint256 priceWei, uint256 supply, uint256 start, uint256 end);
     event SoftCapReached(uint256 totalRaised);
     event Withdrawn(address indexed beneficiary, uint256 amount);
@@ -93,20 +97,36 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         require(dest != address(0), "Presale: dest zero");
         require(amount > 0, "Presale: zero amount");
         _escrowPayments[dest] += amount;
+        totalEscrow += amount;
+        emit PaymentQueued(dest, amount);
     }
 
     /// @notice Withdraw pending payments (excess/refund). Uses pull-pattern.
     function withdrawPayments() external nonReentrant {
         uint256 payment = _escrowPayments[msg.sender];
         require(payment > 0, "Presale: no payments");
+
+        // Effects (CEI)
         _escrowPayments[msg.sender] = 0;
-        payable(msg.sender).transfer(payment);
+        if (totalEscrow >= payment) {
+            totalEscrow -= payment;
+        } else {
+            totalEscrow = 0;
+        }
+
+        // Use Address.sendValue to forward all gas and be compatible with smart contract wallets
+        Address.sendValue(payable(msg.sender), payment);
         emit PaymentsWithdrawn(msg.sender, payment);
     }
 
     /// @notice View pending payments for an account
     function paymentsOf(address account) external view returns (uint256) {
         return _escrowPayments[account];
+    }
+
+    /// @notice Returns the total escrowed ETH reserved for buyer withdrawals
+    function escrowBalance() external view returns (uint256) {
+        return totalEscrow;
     }
 
     // -------------------------
@@ -246,10 +266,13 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
     function withdrawProceeds(address payable beneficiary) external onlyOwner nonReentrant {
         require(saleEnded, "Presale: sale not ended");
         require(softCapReached, "Presale: softCap not reached");
-        uint256 balance = address(this).balance;
-        require(balance > 0, "Presale: nothing to withdraw");
-        Address.sendValue(beneficiary, balance);
-        emit Withdrawn(beneficiary, balance);
+
+        uint256 currentBalance = address(this).balance;
+        // Do not withdraw funds that are reserved for escrow/refunds
+        require(currentBalance > totalEscrow, "Presale: nothing withdrawable (reserved escrow)");
+        uint256 withdrawable = currentBalance - totalEscrow;
+        Address.sendValue(beneficiary, withdrawable);
+        emit Withdrawn(beneficiary, withdrawable);
     }
 
     /// @notice End the sale. Only owner.

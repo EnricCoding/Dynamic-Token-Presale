@@ -213,10 +213,11 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
         } else if (block.timestamp >= schedule.start + schedule.duration) {
             return schedule.totalAmount;
         } else {
-            // linear vesting from start to start+duration
-            return
-                (schedule.totalAmount * (block.timestamp - schedule.start)) /
-                schedule.duration;
+            uint256 elapsed = block.timestamp - schedule.start;
+            // Compute safely: avoid large multiplication before division
+            uint256 part1 = schedule.totalAmount / schedule.duration;
+            uint256 part2 = schedule.totalAmount % schedule.duration;
+            return part1 * elapsed + (part2 * elapsed) / schedule.duration;
         }
     }
 

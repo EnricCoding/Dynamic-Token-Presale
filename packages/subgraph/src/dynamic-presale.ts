@@ -7,7 +7,8 @@ import {
   SoftCapReached,
   SaleEnded,
   Withdrawn,
-  PaymentsWithdrawn
+  PaymentsWithdrawn,
+  PaymentQueued as PaymentQueuedEvent
 } from "../generated/DynamicPresale/DynamicPresale";
 import {
   User,
@@ -17,14 +18,16 @@ import {
   Claim,
   Refund,
   Withdrawal,
-  PaymentWithdrawal
+  PaymentWithdrawal,
+  PaymentQueued as PaymentQueuedEntity
 } from "../generated/schema";
 
 // Helper: Get or create User
 function getOrCreateUser(address: Bytes, timestamp: BigInt): User {
-  let user = User.load(address.toHexString());
+  let id = address.toHexString();
+  let user = User.load(id);
   if (user == null) {
-    user = new User(address.toHexString());
+    user = new User(id);
     user.totalContributed = BigInt.fromI32(0);
     user.totalTokensPurchased = BigInt.fromI32(0);
     user.totalTokensClaimed = BigInt.fromI32(0);
@@ -32,6 +35,8 @@ function getOrCreateUser(address: Bytes, timestamp: BigInt): User {
     user.totalVested = BigInt.fromI32(0);
     user.totalReleased = BigInt.fromI32(0);
     user.tokenBalance = BigInt.fromI32(0);
+    // NEW: pendingPayments (escrowed ETH for this user)
+    user.pendingPayments = BigInt.fromI32(0);
     user.firstInteractionTimestamp = timestamp;
     user.lastInteractionTimestamp = timestamp;
     user.save();
@@ -52,11 +57,13 @@ function getOrCreatePresaleStats(): PresaleStats {
     stats.maxPerWallet = BigInt.fromI32(0);
     stats.softCapReached = false;
     stats.saleEnded = false;
-    stats.saleEndedTimestamp = null;
+    // saleEndedTimestamp intentionally left unset
     stats.totalPhases = BigInt.fromI32(0);
     stats.totalPurchases = BigInt.fromI32(0);
     stats.totalClaims = BigInt.fromI32(0);
     stats.totalRefunds = BigInt.fromI32(0);
+    // NEW: totalEscrow (sum of queued payments)
+    stats.totalEscrow = BigInt.fromI32(0);
     stats.lastUpdatedTimestamp = BigInt.fromI32(0);
     stats.save();
   }
@@ -86,7 +93,7 @@ export function handlePurchased(event: Purchased): void {
   purchase.transactionHash = event.transaction.hash;
   purchase.save();
   
-  // Update PhaseF
+  // Update Phase
   let phase = Phase.load(event.params.phaseId.toString());
   if (phase != null) {
     phase.sold = phase.sold.plus(event.params.tokensAmount);
@@ -103,7 +110,7 @@ export function handlePurchased(event: Purchased): void {
   stats.totalTokensSold = stats.totalTokensSold.plus(event.params.tokensAmount);
   stats.totalPurchases = stats.totalPurchases.plus(BigInt.fromI32(1));
   
-  // Check if this is a new buyer
+  // Check if this is a new buyer (first contribution)
   if (user.totalContributed == event.params.ethAmount) {
     stats.totalBuyers = stats.totalBuyers.plus(BigInt.fromI32(1));
   }
@@ -144,8 +151,8 @@ export function handleRefundRequested(event: RefundRequested): void {
   let user = getOrCreateUser(event.params.buyer, event.block.timestamp);
   let stats = getOrCreatePresaleStats();
   
-  // Update user
-  user.totalRefunded = user.totalRefunded.plus(event.params.ethAmount);
+  // NOTE: keep Refund entity as request record.
+  // Actual refunded amount (user.totalRefunded) will be updated when PaymentsWithdrawn occurs
   user.lastInteractionTimestamp = event.block.timestamp;
   user.save();
   
@@ -159,8 +166,36 @@ export function handleRefundRequested(event: RefundRequested): void {
   refund.transactionHash = event.transaction.hash;
   refund.save();
   
-  // Update stats
+  // Update stats (count of refund requests)
   stats.totalRefunds = stats.totalRefunds.plus(BigInt.fromI32(1));
+  stats.lastUpdatedTimestamp = event.block.timestamp;
+  stats.save();
+}
+
+// NEW Handler: PaymentQueued (escrowed payments: excess + refunds)
+export function handlePaymentQueued(event: PaymentQueuedEvent): void {
+  // Create PaymentQueued entity
+  let id = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  let pq = new PaymentQueuedEntity(id);
+  // The contract uses `_asyncTransfer(dest, amount)` so param name is likely `dest`
+  // If the generated event param has another name, adjust accordingly.
+  pq.payee = event.params.dest.toHexString();
+  pq.amount = event.params.amount;
+  pq.reason = "queued";
+  pq.timestamp = event.block.timestamp;
+  pq.blockNumber = event.block.number;
+  pq.transactionHash = event.transaction.hash;
+  pq.save();
+
+  // Update User.pendingPayments
+  let user = getOrCreateUser(event.params.dest, event.block.timestamp);
+  user.pendingPayments = user.pendingPayments.plus(event.params.amount);
+  user.lastInteractionTimestamp = event.block.timestamp;
+  user.save();
+
+  // Update global stats.totalEscrow
+  let stats = getOrCreatePresaleStats();
+  stats.totalEscrow = stats.totalEscrow.plus(event.params.amount);
   stats.lastUpdatedTimestamp = event.block.timestamp;
   stats.save();
 }
@@ -233,6 +268,26 @@ export function handlePaymentsWithdrawn(event: PaymentsWithdrawn): void {
   paymentWithdrawal.transactionHash = event.transaction.hash;
   paymentWithdrawal.save();
   
+  // Update user.pendingPayments (subtract safely)
+  if (user.pendingPayments.ge(event.params.amount)) {
+    user.pendingPayments = user.pendingPayments.minus(event.params.amount);
+  } else {
+    user.pendingPayments = BigInt.fromI32(0);
+  }
+
+  // Update user.totalRefunded (consider payments withdrawn as refunded/excess received)
+  user.totalRefunded = user.totalRefunded.plus(event.params.amount);
+
   user.lastInteractionTimestamp = event.block.timestamp;
   user.save();
+
+  // Update global stats.totalEscrow (subtract safely)
+  let stats = getOrCreatePresaleStats();
+  if (stats.totalEscrow.ge(event.params.amount)) {
+    stats.totalEscrow = stats.totalEscrow.minus(event.params.amount);
+  } else {
+    stats.totalEscrow = BigInt.fromI32(0);
+  }
+  stats.lastUpdatedTimestamp = event.block.timestamp;
+  stats.save();
 }

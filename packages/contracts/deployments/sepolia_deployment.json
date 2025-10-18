@@ -1,9 +1,9 @@
 {
   "network": "sepolia",
-  "timestamp": "2025-10-04T16:10:49.946Z",
+  "timestamp": "2025-10-13T17:43:25.447Z",
   "contracts": {
     "MyToken": {
-      "address": "0x554246113d00Fc80bA8457eeD065DC33C92f5331",
+      "address": "0x4B0056348e71722Ee0bF6466D278102aF2165F1E",
       "args": [
         "Dynamic Presale Token",
         "DPT",
@@ -11,9 +11,9 @@
       ]
     },
     "DynamicPresale": {
-      "address": "0x554BE1651bCe10c4c0B8c48271F28E22fcf81F1b",
+      "address": "0x7878dBCFd713b76b1De6F0812fEC9c6c2b8d55Bc",
       "args": [
-        "0x554246113d00Fc80bA8457eeD065DC33C92f5331",
+        "0x4B0056348e71722Ee0bF6466D278102aF2165F1E",
         18,
         "10000000000000000000",
         "10000000000000000",
@@ -21,9 +21,9 @@
       ]
     },
     "TokenVesting": {
-      "address": "0xA77f8949fc69e6B510E88AAAB6f5D84Bc1788838",
+      "address": "0x626Cb432AcE64ED61Fe246021Afb2630F2BEe3D9",
       "args": [
-        "0x554246113d00Fc80bA8457eeD065DC33C92f5331"
+        "0x4B0056348e71722Ee0bF6466D278102aF2165F1E"
       ]
     }
   },

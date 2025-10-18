@@ -97,7 +97,6 @@ Icon?
 
 dist/
 build/
-lib/
 tmp/
 temp/
 
@@ -109,7 +108,7 @@ mochawesome.json
 *.tgz
 *.cache/
 .github/workflows/artifacts/
-
+STACK_OVERVIEW.md
 
 deployments/local/
 deployments/localhost/

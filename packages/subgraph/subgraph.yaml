@@ -6,7 +6,7 @@ dataSources:
     name: DynamicPresale
     network: sepolia
     source:
-      address: "0x554BE1651bCe10c4c0B8c48271F28E22fcf81F1b"
+      address: "0x7878dBCFd713b76b1De6F0812fEC9c6c2b8d55Bc"
       abi: DynamicPresale
       startBlock: 9342238
     mapping:
@@ -20,6 +20,9 @@ dataSources:
         - Claim
         - Refund
         - PresaleStats
+        - PaymentQueued         # NEW: escrow events (excess/refunds queued)
+        - PaymentWithdrawal     # NEW: withdrawals by payees
+        - Withdrawal            # ensure Withdrawn events are stored
       abis:
         - name: DynamicPresale
           file: ../contracts/artifacts/contracts/DynamicPresale.sol/DynamicPresale.json
@@ -30,6 +33,8 @@ dataSources:
           handler: handleClaimed
         - event: RefundRequested(indexed address,uint256)
           handler: handleRefundRequested
+        - event: PaymentQueued(indexed address,uint256)           # NEW
+          handler: handlePaymentQueued
         - event: PhaseAdded(indexed uint256,uint256,uint256,uint256,uint256)
           handler: handlePhaseAdded
         - event: SoftCapReached(uint256)
@@ -46,7 +51,7 @@ dataSources:
     name: TokenVesting
     network: sepolia
     source:
-      address: "0xA77f8949fc69e6B510E88AAAB6f5D84Bc1788838"
+      address: "0x626Cb432AcE64ED61Fe246021Afb2630F2BEe3D9"
       abi: TokenVesting
       startBlock: 9342239
     mapping:
@@ -73,7 +78,8 @@ dataSources:
     name: MyToken
     network: sepolia
     source:
-      address: "0x554246113d00Fc80bA8457eeD065DC33C92f5331"
+      # UPDATED: MyToken deployed address from your logs
+      address: "0x4B0056348e71722Ee0bF6466D278102aF2165F1E"
       abi: MyToken
       startBlock: 9342237
     mapping:

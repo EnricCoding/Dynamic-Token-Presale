@@ -2,13 +2,13 @@ import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 import {
   VestingCreated,
   TokensReleased,
-  VestingRevoked
+  VestingRevoked,
 } from "../generated/TokenVesting/TokenVesting";
 import {
   User,
   VestingSchedule,
   TokenRelease,
-  VestingStats
+  VestingStats,
 } from "../generated/schema";
 
 // Helper: Get or create User
@@ -23,6 +23,7 @@ function getOrCreateUser(address: Bytes, timestamp: BigInt): User {
     user.totalVested = BigInt.fromI32(0);
     user.totalReleased = BigInt.fromI32(0);
     user.tokenBalance = BigInt.fromI32(0);
+    user.pendingPayments = BigInt.fromI32(0);
     user.firstInteractionTimestamp = timestamp;
     user.lastInteractionTimestamp = timestamp;
     user.save();
@@ -49,9 +50,12 @@ function getOrCreateVestingStats(): VestingStats {
 export function handleVestingCreated(event: VestingCreated): void {
   let user = getOrCreateUser(event.params.beneficiary, event.block.timestamp);
   let stats = getOrCreateVestingStats();
-  
+
   // Create VestingSchedule entity
-  let scheduleId = event.params.beneficiary.toHexString() + "-" + event.params.scheduleId.toString();
+  let scheduleId =
+    event.params.beneficiary.toHexString() +
+    "-" +
+    event.params.scheduleId.toString();
   let schedule = new VestingSchedule(scheduleId);
   schedule.beneficiary = user.id;
   schedule.scheduleId = event.params.scheduleId;
@@ -69,12 +73,12 @@ export function handleVestingCreated(event: VestingCreated): void {
   schedule.createdAtBlockNumber = event.block.number;
   schedule.lastReleasedTimestamp = null;
   schedule.save();
-  
+
   // Update user
   user.totalVested = user.totalVested.plus(event.params.totalAmount);
   user.lastInteractionTimestamp = event.block.timestamp;
   user.save();
-  
+
   // Update stats
   stats.totalSchedules = stats.totalSchedules.plus(BigInt.fromI32(1));
   stats.totalCommitted = stats.totalCommitted.plus(event.params.totalAmount);
@@ -86,9 +90,12 @@ export function handleVestingCreated(event: VestingCreated): void {
 export function handleTokensReleased(event: TokensReleased): void {
   let user = getOrCreateUser(event.params.beneficiary, event.block.timestamp);
   let stats = getOrCreateVestingStats();
-  
+
   // Update VestingSchedule
-  let scheduleId = event.params.beneficiary.toHexString() + "-" + event.params.scheduleId.toString();
+  let scheduleId =
+    event.params.beneficiary.toHexString() +
+    "-" +
+    event.params.scheduleId.toString();
   let schedule = VestingSchedule.load(scheduleId);
   if (schedule != null) {
     schedule.released = schedule.released.plus(event.params.amount);
@@ -96,9 +103,10 @@ export function handleTokensReleased(event: TokensReleased): void {
     schedule.lastReleasedTimestamp = event.block.timestamp;
     schedule.save();
   }
-  
+
   // Create TokenRelease entity
-  let releaseId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  let releaseId =
+    event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   let release = new TokenRelease(releaseId);
   release.beneficiary = user.id;
   release.schedule = scheduleId;
@@ -107,13 +115,13 @@ export function handleTokensReleased(event: TokensReleased): void {
   release.blockNumber = event.block.number;
   release.transactionHash = event.transaction.hash;
   release.save();
-  
+
   // Update user
   user.totalReleased = user.totalReleased.plus(event.params.amount);
   user.tokenBalance = user.tokenBalance.plus(event.params.amount);
   user.lastInteractionTimestamp = event.block.timestamp;
   user.save();
-  
+
   // Update stats
   stats.totalReleased = stats.totalReleased.plus(event.params.amount);
   stats.lastUpdatedTimestamp = event.block.timestamp;
@@ -124,9 +132,12 @@ export function handleTokensReleased(event: TokensReleased): void {
 export function handleVestingRevoked(event: VestingRevoked): void {
   let user = getOrCreateUser(event.params.beneficiary, event.block.timestamp);
   let stats = getOrCreateVestingStats();
-  
+
   // Update VestingSchedule
-  let scheduleId = event.params.beneficiary.toHexString() + "-" + event.params.scheduleId.toString();
+  let scheduleId =
+    event.params.beneficiary.toHexString() +
+    "-" +
+    event.params.scheduleId.toString();
   let schedule = VestingSchedule.load(scheduleId);
   if (schedule != null) {
     schedule.revoked = true;
@@ -135,15 +146,17 @@ export function handleVestingRevoked(event: VestingRevoked): void {
     schedule.remaining = BigInt.fromI32(0); // All remaining tokens returned
     schedule.save();
   }
-  
+
   // Update user
   user.totalVested = user.totalVested.minus(event.params.unvestedAmount);
   user.lastInteractionTimestamp = event.block.timestamp;
   user.save();
-  
+
   // Update stats
   stats.totalRevoked = stats.totalRevoked.plus(event.params.unvestedAmount);
-  stats.totalCommitted = stats.totalCommitted.minus(event.params.unvestedAmount);
+  stats.totalCommitted = stats.totalCommitted.minus(
+    event.params.unvestedAmount
+  );
   stats.lastUpdatedTimestamp = event.block.timestamp;
   stats.save();
 }
