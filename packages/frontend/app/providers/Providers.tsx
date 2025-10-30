@@ -1,4 +1,3 @@
-// packages/frontend/app/providers/Providers.tsx
 'use client';
 
 import React from 'react';
@@ -10,7 +9,7 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { ApolloProvider } from '@apollo/client/react';
 
 import { queryClient } from '@/lib/queryClient';
-import { wagmiConfig, chains } from '@/lib/wagmi';
+import { wagmiConfig } from '@/lib/wagmi';
 import { apolloClient } from '@/lib/apolloClient';
 
 import '@rainbow-me/rainbowkit/styles.css';
