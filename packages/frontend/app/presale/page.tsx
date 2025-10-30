@@ -36,6 +36,19 @@ function formatTimeLeft(secondsLeft: number) {
   return [`${secs}s`, false] as const;
 }
 
+/* Small accessible info icon with tooltip via title */
+function Info({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      aria-label={text}
+      className="inline-flex items-center justify-center ml-2 rounded-full border border-slate-200 bg-slate-50 text-xs w-5 h-5"
+    >
+      ?
+    </span>
+  );
+}
+
 /* ---------- Component ---------- */
 
 export default function PresaleDashboard(): JSX.Element {
@@ -54,7 +67,7 @@ export default function PresaleDashboard(): JSX.Element {
   // mutations
   const { buyMutation, claimMutation, requestRefundMutation } = usePresaleMutations();
 
-  /* ---------- Queries (useQuery v5: single options object with generics) ---------- */
+  /* ---------- Queries ---------- */
 
   const totalRaisedQ = useQuery<bigint, Error>({
     queryKey: ['presale', 'totalRaised'],
@@ -83,6 +96,15 @@ export default function PresaleDashboard(): JSX.Element {
     retry: 1,
   });
 
+  const totalBuyersQ = useQuery<number, Error>({
+    queryKey: ['presale', 'totalBuyers'],
+    queryFn: async () => presale.getTotalBuyers(),
+    enabled: mounted,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
   const contributionsQ = useQuery<bigint, Error>({
     queryKey: ['presale', 'contributions', clientAddress ?? 'anon'],
     queryFn: async () => {
@@ -107,17 +129,27 @@ export default function PresaleDashboard(): JSX.Element {
     retry: 1,
   });
 
-  // calculate tokens for an entered amount
+  // token decimals for formatting
+  const tokenDecimalsQ = useQuery<number, Error>({
+    queryKey: ['presale', 'tokenDecimals'],
+    queryFn: async () => presale.getTokenDecimals(),
+    enabled: mounted,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  // calculate tokens for an entered amount (dynamic)
   const [ethToSend, setEthToSend] = useState<string>('0.01');
   const amountWeiForCalc = useMemo<bigint | null>(() => {
-    if (!mounted) return null;
     const n = Number(ethToSend);
     if (!Number.isFinite(n) || n <= 0) return null;
     return BigInt(Math.floor(n * 1e18));
-  }, [mounted, ethToSend]);
+  }, [ethToSend]);
 
-  const calculateQ = useQuery<CalcResult, Error>({
-    queryKey: ['presale', 'calculate', amountWeiForCalc?.toString() ?? 'null'],
+  const calculateQueryKey = ['presale', 'calculate', amountWeiForCalc?.toString() ?? 'null'];
+  const calculateQuery = useQuery<CalcResult, Error>({
+    queryKey: calculateQueryKey,
     queryFn: async () => {
       if (amountWeiForCalc == null) throw new Error('no amount for calc');
       return presale.calculateTokens(amountWeiForCalc);
@@ -180,18 +212,7 @@ export default function PresaleDashboard(): JSX.Element {
     retry: 1,
   });
 
-  /* ---------- Light logs for debugging (non noisy) ---------- */
-  useEffect(() => {
-    if (totalRaisedQ.data !== undefined && totalRaisedQ.data !== null) {
-      console.info('[PresaleDashboard] totalRaised:', totalRaisedQ.data.toString());
-    }
-  }, [totalRaisedQ.data]);
-
-  useEffect(() => {
-    if (phasesListQ.data) console.info('[PresaleDashboard] phases loaded:', phasesListQ.data.length);
-  }, [phasesListQ.data]);
-
-  /* ---------- UI helpers ---------- */
+  /* ---------- UX helpers ---------- */
 
   const displayWeiAsEth = (v?: bigint | null): string => {
     if (!v) return '0';
@@ -205,12 +226,23 @@ export default function PresaleDashboard(): JSX.Element {
     }
   };
 
-  const displayBigInt = (v?: bigint | null): string => {
+  const displayTokens = (v?: bigint | null): string => {
     if (!v) return '0';
+    const decimals = tokenDecimalsQ.data ?? 18;
     try {
-      return formatBigIntWithCommas(v.toString());
+      const asStr = formatUnits(v as bigint, decimals);
+      const asNum = Number(asStr);
+      const maxFrac = Math.min(6, decimals);
+      if (Number.isFinite(asNum)) {
+        return new Intl.NumberFormat('en-US', { maximumFractionDigits: maxFrac }).format(asNum);
+      }
+      return asStr;
     } catch {
-      return v.toString();
+      try {
+        return formatBigIntWithCommas((v as bigint).toString());
+      } catch {
+        return String(v);
+      }
     }
   };
 
@@ -270,7 +302,7 @@ export default function PresaleDashboard(): JSX.Element {
     }
   }
 
-  /* ---------- Derived UI state ---------- */
+  /* ---------- Derived state ---------- */
 
   const buying = buyMutation.status === 'pending';
   const claiming = claimMutation.status === 'pending';
@@ -290,7 +322,9 @@ export default function PresaleDashboard(): JSX.Element {
   const phaseCount = phasesListQ.data?.length ?? 0;
   const currentPhaseIndex = currentPhaseIndexQ.data ?? null;
   const currentPhase = phasesListQ.data?.find((p) => p.phaseId === currentPhaseIndex) ?? null;
+  const hasActive = currentPhase !== null;
 
+  // seconds left for active phase (real time)
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
   useEffect(() => {
     const idx = currentPhaseIndex;
@@ -312,23 +346,48 @@ export default function PresaleDashboard(): JSX.Element {
     return () => clearInterval(t);
   }, [currentPhaseIndex, phasesListQ.data]);
 
-  const [countdownLabel] = secsLeft == null ? ['—'] : formatTimeLeft(secsLeft);
+  const [countdownLabel, countdownEnded] = secsLeft == null ? ['—', true] : formatTimeLeft(secsLeft);
+
+  // Soft cap progress percent (0-100) using BigInt arithmetic
+  const softCapPercent = (() => {
+    try {
+      if (!softCap || softCap === BigInt(0)) return 0;
+      const pct = Number((totalRaised * BigInt(100)) / softCap);
+      if (!Number.isFinite(pct)) return 0;
+      return Math.max(0, Math.min(100, Math.round(pct)));
+    } catch {
+      return 0;
+    }
+  })();
+
+  // Current phase sold percent
+  const currentPhaseSoldPercent = (() => {
+    if (!currentPhase) return 0;
+    try {
+      if (currentPhase.supply === BigInt(0)) return 0;
+      const pct = Number((currentPhase.sold * BigInt(100)) / currentPhase.supply);
+      if (!Number.isFinite(pct)) return 0;
+      return Math.max(0, Math.min(100, Math.round(pct)));
+    } catch {
+      return 0;
+    }
+  })();
 
   const currentPhasePriceEth = currentPhase
     ? (() => {
-        try {
-          return formatUnits(currentPhase.priceWei, 18);
-        } catch {
-          return '0';
-        }
-      })()
+      try {
+        return formatUnits(currentPhase.priceWei, 18);
+      } catch {
+        return '0';
+      }
+    })()
     : null;
 
   const connectedHint = !mounted ? 'Connect your wallet to enable buying' : clientAddress ? 'Connected: quick transactions supported' : 'Connect your wallet to enable buying';
 
-  /* ---------- Render ---------- */
+  /* ---------- Small UI subcomponents ---------- */
 
-  function StatCard({ title, loading, children }: { title: string; loading?: boolean; children: React.ReactNode }) {
+  function StatCard({ title, loading, children }: { title: React.ReactNode; loading?: boolean; children: React.ReactNode }) {
     return (
       <div className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -342,13 +401,15 @@ export default function PresaleDashboard(): JSX.Element {
     );
   }
 
+  /* ---------- Render ---------- */
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold leading-tight text-slate-900">Presale Dashboard</h1>
           <p className="mt-1 text-sm text-slate-500 max-w-xl">
-            Participate in the Dynamic Token Presale — price and supply change per phase. Connect your wallet to buy, claim or request refunds.
+            Buy tokens while a phase is <strong>Live</strong>. Soft cap = minimum ETH needed for the sale to be successful. If the soft cap is not reached, buyers can request a refund.
           </p>
         </div>
 
@@ -357,21 +418,46 @@ export default function PresaleDashboard(): JSX.Element {
         </div>
       </header>
 
-      {/* Top summary */}
+      {/* Top summary - improved UX */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total raised */}
         <StatCard title="Total raised" loading={totalRaisedQ.isFetching}>
-          {totalRaisedQ.isLoading ? <Skeleton className="h-8 w-32" /> : `${displayWeiAsEth(totalRaised)} ETH`}
+          {totalRaisedQ.isLoading ? (
+            <Skeleton className="h-8 w-32" />
+          ) : (
+            <div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl font-semibold">{displayWeiAsEth(totalRaised)} <span className="text-sm text-slate-500">ETH</span></div>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">Total ETH collected so far from all buyers.</div>
+            </div>
+          )}
         </StatCard>
 
-        <StatCard title="Soft cap" loading={softCapQ.isFetching}>
+        {/* Soft cap */}
+        <StatCard
+          title={<span className="flex items-center">Soft cap <Info text="Soft cap: minimum amount of ETH that must be raised for the sale to be successful. If not reached, buyers can request refunds." /></span>}
+          loading={softCapQ.isFetching}
+        >
           {softCapQ.isLoading ? (
             <Skeleton className="h-8 w-36" />
           ) : softCap ? (
             <div>
-              <div>{displayWeiAsEth(softCap)} ETH</div>
-              <div className="text-xs text-slate-500">
-                Progress: {softCap > BigInt(0) ? `${Math.round(Number((totalRaised * BigInt(100)) / softCap))}%` : '—'}
-                {softCapReached ? ' • Soft cap reached' : ''}
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-medium">{displayWeiAsEth(softCap)} ETH</div>
+                <div className="text-sm text-slate-500">{softCapPercent}%</div>
+              </div>
+
+              <div className="h-2 bg-slate-100 rounded-full mt-3 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${softCapPercent >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                  style={{ width: `${softCapPercent}%`, transition: 'width 600ms ease' }}
+                />
+              </div>
+
+              <div className="text-xs text-slate-500 mt-2">
+                {softCapPercent >= 100 ? 'Soft cap reached — sale considered successful' : 'Progress toward minimum target needed for a successful sale.'}
+                {softCapReached === false ? ' • Soft cap not yet reached' : ''}
               </div>
             </div>
           ) : (
@@ -379,13 +465,26 @@ export default function PresaleDashboard(): JSX.Element {
           )}
         </StatCard>
 
+        {/* Current phase */}
         <StatCard title="Current phase" loading={currentPhaseIndexQ.isFetching || phasesListQ.isFetching}>
           {currentPhase ? (
             <div>
-              <div>Phase {currentPhase.phaseId}</div>
-              <div className="text-xs text-slate-500">Price: {currentPhasePriceEth} ETH</div>
-              <div className="text-xs text-slate-500">Ends in: {countdownLabel}</div>
-              <div className="mt-1 text-xs text-slate-500">Remaining: {displayBigInt(remainingTokensQ.data ?? BigInt(0))}</div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm font-medium">Phase {currentPhase.phaseId} • {countdownEnded ? 'Ended' : 'Live'}</div>
+                  <div className="text-xs text-slate-500">Price: {currentPhasePriceEth} ETH</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium">{displayTokens(currentPhase.supply - currentPhase.sold)} remaining</div>
+                  <div className="text-xs text-slate-500">{currentPhaseSoldPercent}% sold</div>
+                </div>
+              </div>
+
+              <div className="mt-3 h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-500" style={{ width: `${currentPhaseSoldPercent}%`, transition: 'width 400ms ease' }} />
+              </div>
+
+              <div className="mt-2 text-xs text-slate-500">Ends in: <span className="font-medium">{countdownLabel}</span></div>
             </div>
           ) : currentPhaseIndex === null ? (
             <div className="text-xs text-slate-500">No active phase</div>
@@ -394,13 +493,18 @@ export default function PresaleDashboard(): JSX.Element {
           )}
         </StatCard>
 
-        <StatCard title="Total buyers & sold" loading={totalTokensSoldQ.isFetching || phasesListQ.isFetching}>
+        {/* Buyers & sold */}
+        <StatCard
+          title={<span className="flex items-center">Buyers & tokens sold <Info text="Buyers = number of unique addresses that purchased. Tokens sold = total tokens allocated (not yet claimed)." /></span>}
+          loading={totalTokensSoldQ.isFetching || phasesListQ.isFetching}
+        >
           {totalTokensSoldQ.isLoading ? (
             <Skeleton className="h-8 w-36" />
           ) : (
             <div>
-              <div>{displayBigInt(totalTokensSoldQ.data ?? BigInt(0))} tokens</div>
-              <div className="text-xs text-slate-500">Phases configured: {phaseCount}</div>
+              <div className="text-lg font-medium">{displayTokens(totalTokensSoldQ.data ?? BigInt(0))} tokens</div>
+              <div className="text-xs text-slate-500 mt-2">Unique buyers: <span className="font-medium">{totalBuyersQ.data ?? 0}</span> • Phases: {phaseCount}</div>
+              <div className="text-xs text-slate-500 mt-2">Note: tokens become claimable after the sale ends (if soft cap reached).</div>
             </div>
           )}
         </StatCard>
@@ -426,9 +530,14 @@ export default function PresaleDashboard(): JSX.Element {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-sm font-medium">Phase {p.phaseId} • {status}</div>
-                        <div className="text-xs text-slate-500">Price: {formatUnits(p.priceWei, 18)} ETH • Supply: {displayBigInt(p.supply)} • Sold: {displayBigInt(p.sold)}</div>
+                        <div className="text-xs text-slate-500">
+                          Price: {formatUnits(p.priceWei, 18)} ETH • Supply: {displayTokens(p.supply)} • Sold: {displayTokens(p.sold)}
+                        </div>
                       </div>
                       <div className="text-xs text-slate-500">{percentSold}%</div>
+                    </div>
+                    <div className="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-300" style={{ width: `${percentSold}%` }} />
                     </div>
                   </div>
                 );
@@ -472,18 +581,20 @@ export default function PresaleDashboard(): JSX.Element {
               </div>
 
               <div className="mt-3 text-sm">
-                {mounted && amountWeiForCalc === null ? (
+                {amountWeiForCalc === null ? (
                   <div className="text-slate-500">Enter an ETH amount to estimate tokens</div>
-                ) : calculateQ.isFetching ? (
+                ) : !hasActive ? (
+                  <div className="text-rose-600">No active phase — purchases are disabled</div>
+                ) : calculateQuery.isFetching ? (
                   <div className="inline-flex items-center gap-2 text-slate-500"><Spinner size={12} /> Calculating…</div>
-                ) : calculateQ.isError ? (
+                ) : calculateQuery.isError ? (
                   <div className="text-rose-600">Unable to estimate right now</div>
-                ) : calculateQ.data ? (
+                ) : calculateQuery.data ? (
                   <div className="text-slate-700">
-                    <div><strong>Estimated tokens:</strong> {displayBigInt(calculateQ.data.tokens)} tokens</div>
+                    <div><strong>Estimated tokens:</strong> {displayTokens(calculateQuery.data.tokens)} tokens</div>
                     <div className="text-xs text-slate-500">
-                      <strong>Cost:</strong> {displayWeiAsEth(calculateQ.data.cost)} ETH
-                      {calculateQ.data.excess > BigInt(0) ? <> — <strong>Excess:</strong> {displayWeiAsEth(calculateQ.data.excess)} ETH</> : null}
+                      <strong>Cost:</strong> {displayWeiAsEth(calculateQuery.data.cost)} ETH
+                      {calculateQuery.data.excess > BigInt(0) ? <> — <strong>Excess:</strong> {displayWeiAsEth(calculateQuery.data.excess)} ETH</> : null}
                     </div>
                   </div>
                 ) : null}
@@ -493,14 +604,20 @@ export default function PresaleDashboard(): JSX.Element {
             <div>
               <button
                 onClick={onBuy}
-                disabled={!clientAddress || buying || isAnyLoading}
-                className={`w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 font-medium transition ${!clientAddress || buying || isAnyLoading ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                disabled={!clientAddress || buying || isAnyLoading || !hasActive}
+                className={`w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 font-medium transition ${!clientAddress || buying || isAnyLoading || !hasActive ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                 aria-busy={buying}
-                title={buying ? 'Processing purchase' : 'Buy tokens'}
+                title={buying ? 'Processing purchase' : (!hasActive ? 'No active phase' : 'Buy tokens')}
               >
                 {buying ? (<><Spinner size={16} /><span>Buying…</span></>) : 'Buy'}
               </button>
-              <div className="mt-2 text-xs text-slate-500">{connectedHint}</div>
+              <div className="mt-2 text-xs">
+                {!hasActive ? (
+                  <div className="text-rose-600">No active phase — purchases disabled</div>
+                ) : (
+                  <div className="text-slate-500">{connectedHint}</div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -511,7 +628,7 @@ export default function PresaleDashboard(): JSX.Element {
         </div>
       </section>
 
-      {/* My account & help */}
+      {/* Account & help */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-lg border p-4 shadow-sm">
           <h3 className="text-sm text-slate-600">My account</h3>
@@ -523,7 +640,7 @@ export default function PresaleDashboard(): JSX.Element {
 
             <div className="flex items-center justify-between">
               <div className="text-xs text-slate-500">Pending tokens</div>
-              <div className="font-medium text-slate-900">{displayBigInt(pendingTokensQ.data ?? BigInt(0))}</div>
+              <div className="font-medium text-slate-900">{displayTokens(pendingTokensQ.data ?? BigInt(0))}</div>
             </div>
 
             <div className="flex gap-2 mt-3">
@@ -557,10 +674,17 @@ export default function PresaleDashboard(): JSX.Element {
               <strong className="text-slate-800">Network / status:</strong>{' '}
               {isAnyLoading ? <span className="inline-flex items-center gap-2"><Spinner size={12} /> Loading data…</span> : <span>Up-to-date</span>}
             </p>
+
             <p>
-              <strong className="text-slate-800">Next steps:</strong>{' '}
-              Connect wallet → Buy tokens → Claim after sale ends.
+              <strong className="text-slate-800">What is soft cap?</strong>{' '}
+              <span className="text-slate-600">Minimum ETH required for the sale to be successful. If not reached, buyers can request refunds.</span>
             </p>
+
+            <p>
+              <strong className="text-slate-800">Timer:</strong>{' '}
+              <span className="text-slate-600">{hasActive ? `${countdownLabel} remaining` : 'No active phase'}</span>
+            </p>
+
             <p className="text-xs text-slate-500">
               All actions are performed on-chain. Transactions may take time depending on network congestion.
             </p>
