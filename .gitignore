@@ -140,3 +140,6 @@ Dockerfile.local
 # Deployment artifacts that shouldn't be committed
 deployment-addresses.json
 deployment-info.json
+
+# Documentation (local development only)
+docs/
