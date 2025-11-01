@@ -186,8 +186,6 @@ describe("Integration Tests - Complete Presale Flow", function () {
 
   describe("Complete Failed Presale Flow (Refunds)", function () {
     it("Should handle failed presale with refunds correctly", async function () {
-      console.log("🚨 Starting Failed Presale Integration Test");
-
       // Deploy presale with very high soft cap
       const highSoftCap = ethers.parseEther("1000"); // 1000 ETH (impossible to reach)
       const DynamicPresaleFactory = await ethers.getContractFactory("DynamicPresale");
@@ -215,16 +213,11 @@ describe("Integration Tests - Complete Presale Flow", function () {
       await failedPresale.connect(buyer2).buy({ value: buy2 });
       await failedPresale.connect(buyer3).buy({ value: buy3 });
 
-      console.log(`📊 Total raised: ${ethers.formatEther(buy1 + buy2 + buy3)} ETH (softCap: ${ethers.formatEther(highSoftCap)} ETH)`);
-
       // End sale without reaching soft cap
       await failedPresale.endSale();
       expect(await failedPresale.softCapReached()).to.be.false;
       
-      console.log("❌ Sale ended without reaching soft cap");
-
       // Request refunds
-      console.log("💸 Processing refunds");
       
       await failedPresale.connect(buyer1).requestRefund();
       await failedPresale.connect(buyer2).requestRefund();
@@ -237,30 +230,22 @@ describe("Integration Tests - Complete Presale Flow", function () {
       expect(await failedPresale.pendingTokens(buyer1.address)).to.equal(0);
       expect(await failedPresale.pendingTokens(buyer2.address)).to.equal(0);
       expect(await failedPresale.pendingTokens(buyer3.address)).to.equal(0);
-      
-      console.log("✅ All refunds processed successfully");
-      console.log("🎉 Failed presale flow handled correctly!");
     });
   });
 
   describe("Team and Advisor Vesting Integration", function () {
     it("Should integrate presale with team/advisor vesting", async function () {
-      console.log("👥 Starting Team/Advisor Vesting Integration Test");
 
       // First, run successful presale
       await time.increaseTo(phase0Start);
       await dynamicPresale.connect(buyer1).buy({ value: SOFT_CAP });
       await dynamicPresale.endSale();
       await dynamicPresale.connect(buyer1).claim();
-      
-      console.log("✅ Presale completed successfully");
 
       // Mint additional tokens for vesting
       const teamTokens = ethers.parseEther("10000"); // 10k tokens for team
       const advisorTokens = ethers.parseEther("5000"); // 5k tokens for advisor
       await myToken.mint(await tokenVesting.getAddress(), teamTokens + advisorTokens);
-      
-      console.log("💰 Additional tokens minted for vesting");
 
       // Create team vesting schedule
       const vestingStart = await time.latest() + 100;
@@ -272,8 +257,6 @@ describe("Integration Tests - Complete Presale Flow", function () {
         TEAM_CLIFF,
         true // revocable
       );
-      
-      console.log(`👨‍💼 Team vesting created: ${ethers.formatEther(teamTokens)} tokens`);
 
       // Create advisor vesting schedule
       await tokenVesting.createVesting(
@@ -284,29 +267,23 @@ describe("Integration Tests - Complete Presale Flow", function () {
         ADVISOR_CLIFF,
         false // not revocable
       );
-      
-      console.log(`🎯 Advisor vesting created: ${ethers.formatEther(advisorTokens)} tokens`);
 
       // Fast forward to after advisor cliff
       await time.increaseTo(vestingStart + ADVISOR_CLIFF + 1000);
-      
+
       // Advisor should be able to release some tokens
       const advisorReleasable = await tokenVesting.getReleasableAmount(advisor.address, 0);
       expect(advisorReleasable).to.be.gt(0);
-      
+
       await tokenVesting.connect(advisor).releaseSchedule(0);
       const advisorBalance = await myToken.balanceOf(advisor.address);
       const diff = advisorBalance > advisorReleasable ? advisorBalance - advisorReleasable : advisorReleasable - advisorBalance;
       expect(diff).to.be.lte(advisorReleasable / 10000n); // Within 0.01% tolerance
-      
-      console.log(`🎯 Advisor released: ${ethers.formatEther(advisorReleasable)} tokens`);
 
       // Team member should not be able to release yet (longer cliff)
       const teamReleasable = await tokenVesting.getReleasableAmount(teamMember.address, 0);
       expect(teamReleasable).to.equal(0);
       
-      console.log("👨‍💼 Team member cannot release yet (cliff not reached)");
-
       // Fast forward to after team cliff
       await time.increaseTo(vestingStart + TEAM_CLIFF + 1000);
       
@@ -317,21 +294,15 @@ describe("Integration Tests - Complete Presale Flow", function () {
       await tokenVesting.connect(teamMember).releaseSchedule(0);
       expectApproxEqual(await myToken.balanceOf(teamMember.address), teamReleasableAfterCliff);
       
-      console.log(`👨‍💼 Team member released: ${ethers.formatEther(teamReleasableAfterCliff)} tokens`);
-
       // Test revoking team vesting (if needed)
       await tokenVesting.revokeVesting(teamMember.address, 0);
       const revokedSchedule = await tokenVesting.getSchedule(teamMember.address, 0);
       expect(revokedSchedule.revoked).to.be.true;
-      
-      console.log("🚫 Team vesting revoked (for example, if team member leaves)");
-      console.log("🎉 Team/Advisor vesting integration completed!");
     });
   });
 
   describe("Multi-Phase Purchase Patterns", function () {
     it("Should handle complex buying patterns across phases", async function () {
-      console.log("🔄 Testing Complex Multi-Phase Purchase Patterns");
 
       // Phase 0: Partial purchase
       await time.increaseTo(phase0Start);
@@ -355,8 +326,6 @@ describe("Integration Tests - Complete Presale Flow", function () {
       await expect(
         dynamicPresale.connect(buyer1).buy({ value: MIN_BUY })
       ).to.be.revertedWith("Presale: above max per wallet");
-
-      console.log("✅ Complex purchase patterns handled correctly");
     });
 
     it("Should handle phase supply exhaustion correctly", async function () {
@@ -387,8 +356,6 @@ describe("Integration Tests - Complete Presale Flow", function () {
 
   describe("Emergency Scenarios", function () {
     it("Should handle emergency pause and unpause", async function () {
-      console.log("🚨 Testing Emergency Pause Scenarios");
-
       await time.increaseTo(phase0Start);
       
       // Normal purchase should work
@@ -412,8 +379,6 @@ describe("Integration Tests - Complete Presale Flow", function () {
     });
 
     it("Should handle token contract pause during claim", async function () {
-      console.log("🚨 Testing Token Contract Pause During Claim");
-
       // Complete successful presale
       await time.increaseTo(phase0Start);
       await dynamicPresale.connect(buyer1).buy({ value: SOFT_CAP });
@@ -460,8 +425,6 @@ describe("Integration Tests - Complete Presale Flow", function () {
 
   describe("Real-World Usage Patterns", function () {
     it("Should simulate realistic presale scenario", async function () {
-      console.log("🌍 Simulating Real-World Presale Scenario");
-
       // Simulate realistic timing and buying patterns
       
       // Phase 0: Early adopters (enthusiastic but smaller amounts)
@@ -505,17 +468,14 @@ describe("Integration Tests - Complete Presale Flow", function () {
       // Owner withdraws proceeds
       await dynamicPresale.withdrawProceeds(owner.address);
       
-      console.log("✅ Real-world scenario simulation completed successfully");
-      
-      // Log final statistics
+      // Final verification
       const totalRaised = await dynamicPresale.totalRaised();
       const totalBuyers = await dynamicPresale.totalBuyers();
       const totalTokensSold = await dynamicPresale.totalTokensSold();
       
-      console.log(`📊 Final Statistics:`);
-      console.log(`   💰 Total Raised: ${ethers.formatEther(totalRaised)} ETH`);
-      console.log(`   👥 Total Buyers: ${totalBuyers}`);
-      console.log(`   🪙 Total Tokens Sold: ${ethers.formatEther(totalTokensSold)} tokens`);
+      expect(totalRaised).to.be.gt(0);
+      expect(totalBuyers).to.be.gt(0);
+      expect(totalTokensSold).to.be.gt(0);
     });
   });
 });

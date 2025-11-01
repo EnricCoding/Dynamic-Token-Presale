@@ -10,7 +10,6 @@ export default function Home() {
 
       <div className="flex gap-4">
         <Link href="/presale" className="px-6 py-3 bg-indigo-600 text-white rounded-md">Open Presale Dashboard</Link>
-        <Link href="/admin" className="px-6 py-3 border rounded-md">Admin (owner)</Link>
       </div>
     </div>
   );

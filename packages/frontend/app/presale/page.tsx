@@ -676,7 +676,6 @@ export default function PresaleDashboard(): JSX.Element {
             </div>
 
             <div className="flex mt-5">
-              {/* contenedor del botón — ocupa todo el ancho de la columna */}
               <div className="w-full">
                 <button
                   onClick={onBuy}

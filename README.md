@@ -394,15 +394,6 @@ packages/
 - **Data Fetching**: TanStack Query (React Query) for caching & state management
 - **Libraries**: OpenZeppelin, ethers.js v6
 
-See `STACK_OVERVIEW.md` for full details.
-
----
-
-## Documentation
-
-- **PROJECT_REVIEW.md** → Complete technical breakdown
-- **STACK_OVERVIEW.md** → Technology versions
-
 ---
 
 ## Key Achievements
@@ -425,4 +416,3 @@ See `STACK_OVERVIEW.md` for full details.
 
 ---
 
-**Last Updated:** November 2025 | **Status:** Production-Ready
