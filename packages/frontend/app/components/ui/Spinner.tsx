@@ -1,7 +1,7 @@
 import React, { JSX } from "react";
 
 type SpinnerProps = {
-    size?: number; // px
+    size?: number; 
     className?: string;
     "aria-label"?: string;
 };

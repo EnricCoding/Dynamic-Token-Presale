@@ -1,8 +1,6 @@
-// packages/frontend/app/presale/page.tsx
 'use client';
 
 import React, { JSX, useEffect, useMemo, useState } from 'react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { formatUnits } from 'viem';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,8 +9,6 @@ import { usePresaleRead } from '@/app/hooks/usePresaleRead';
 import { usePresaleMutations } from '@/app/hooks/usePresaleMutation';
 import { Skeleton, Spinner } from '../components/ui';
 import type { Phase, CalcResult } from '@/app/types/presale.type';
-
-/* ---------- Helpers ---------- */
 
 const ethFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 6,
@@ -36,7 +32,6 @@ function formatTimeLeft(secondsLeft: number) {
   return [`${secs}s`, false] as const;
 }
 
-/* Small accessible info icon with tooltip via title */
 function Info({ text }: { text: string }) {
   return (
     <span
@@ -49,22 +44,16 @@ function Info({ text }: { text: string }) {
   );
 }
 
-/* ---------- Component ---------- */
-
 export default function PresaleDashboard(): JSX.Element {
-  // mounted guard to prevent SSR reads
   const { address } = useAccount();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const clientAddress = mounted ? (address ?? null) : null;
 
-  // read-only contract helpers (client-only)
   const presale = usePresaleRead();
 
-  // react-query client
   const qc = useQueryClient();
 
-  // mutations
   const { buyMutation, claimMutation, requestRefundMutation } = usePresaleMutations();
 
   /* ---------- Queries ---------- */
@@ -135,6 +124,16 @@ export default function PresaleDashboard(): JSX.Element {
     queryFn: async () => presale.getTokenDecimals(),
     enabled: mounted,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  // SALE ENDED flag (needed to decide claim/refund UX)
+  const saleEndedQ = useQuery<boolean, Error>({
+    queryKey: ['presale', 'saleEnded'],
+    queryFn: async () => presale.getSaleEnded(),
+    enabled: mounted,
+    staleTime: 15_000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -246,8 +245,6 @@ export default function PresaleDashboard(): JSX.Element {
     }
   };
 
-  /* ---------- Actions (mutations) ---------- */
-
   async function onBuy(): Promise<void> {
     try {
       const amount = Number(ethToSend);
@@ -271,6 +268,14 @@ export default function PresaleDashboard(): JSX.Element {
         }
       }
 
+      // Defensive check: ensure there's an active phase and tokens remaining
+      const remaining = remainingTokensQ.data ?? BigInt(0);
+      const currentPhaseIdx = currentPhaseIndexQ.data ?? null;
+      if (currentPhaseIdx === null || remaining <= BigInt(0)) {
+        alert('No active phase or no tokens remaining — cannot buy right now.');
+        return;
+      }
+
       await buyMutation.mutateAsync(wei);
       qc.invalidateQueries({ queryKey: ['presale'] });
       alert('Transaction submitted. Check your wallet.');
@@ -282,6 +287,26 @@ export default function PresaleDashboard(): JSX.Element {
 
   async function onClaim(): Promise<void> {
     try {
+      // defensive: ensure sale ended and soft cap reached and user has pending tokens
+      const saleEnded = saleEndedQ.data ?? false;
+      const softCap = softCapQ.data ?? null;
+      const totalRaised = totalRaisedQ.data ?? BigInt(0);
+      const softCapReached = softCap != null ? totalRaised >= softCap : undefined;
+      const pending = pendingTokensQ.data ?? BigInt(0);
+
+      if (!saleEnded) {
+        alert('Sale has not ended yet. You can only claim after the sale ends.');
+        return;
+      }
+      if (softCapReached === false) {
+        alert('Soft cap not reached — claiming disabled. You may request a refund.');
+        return;
+      }
+      if (pending <= BigInt(0)) {
+        alert('No pending tokens to claim for this wallet.');
+        return;
+      }
+
       await claimMutation.mutateAsync();
       qc.invalidateQueries({ queryKey: ['presale'] });
       alert('Claim transaction submitted.');
@@ -293,6 +318,26 @@ export default function PresaleDashboard(): JSX.Element {
 
   async function onRequestRefund(): Promise<void> {
     try {
+      // defensive: ensure sale ended and soft cap NOT reached and user contributed
+      const saleEnded = saleEndedQ.data ?? false;
+      const softCap = softCapQ.data ?? null;
+      const totalRaised = totalRaisedQ.data ?? BigInt(0);
+      const softCapReached = softCap != null ? totalRaised >= softCap : undefined;
+      const contributed = contributionsQ.data ?? BigInt(0);
+
+      if (!saleEnded) {
+        alert('Sale has not ended yet. Refunds are only available after sale end if the soft cap was not met.');
+        return;
+      }
+      if (softCapReached === true) {
+        alert('Soft cap was reached — refunds are disabled. You may claim tokens instead.');
+        return;
+      }
+      if (contributed <= BigInt(0)) {
+        alert('No contribution found for this wallet to refund.');
+        return;
+      }
+
       await requestRefundMutation.mutateAsync();
       qc.invalidateQueries({ queryKey: ['presale'] });
       alert('Refund request submitted.');
@@ -385,6 +430,38 @@ export default function PresaleDashboard(): JSX.Element {
 
   const connectedHint = !mounted ? 'Connect your wallet to enable buying' : clientAddress ? 'Connected: quick transactions supported' : 'Connect your wallet to enable buying';
 
+  // Derived checks for UX: allow/disable actions according to on-chain state
+  const remainingTokens = remainingTokensQ.data ?? BigInt(0);
+  const contributions = contributionsQ.data ?? BigInt(0);
+  const pendingTokens = pendingTokensQ.data ?? BigInt(0);
+  const saleEnded = saleEndedQ.data ?? false;
+
+  const canBuy = hasActive && remainingTokens > BigInt(0);
+  const canClaim = saleEnded === true && softCapReached === true && pendingTokens > BigInt(0);
+  const canRequestRefund = saleEnded === true && softCapReached === false && contributions > BigInt(0);
+
+  const buyDisabledReason = !hasActive
+    ? 'No active phase — purchases disabled'
+    : remainingTokens <= BigInt(0)
+      ? 'No tokens remaining in the current phase'
+      : 'Connect your wallet to buy';
+
+  const claimDisabledReason = !saleEnded
+    ? 'Sale not finished — you can only claim after sale end'
+    : softCapReached === false
+      ? 'Soft cap not reached — claim disabled (you may request refund)'
+      : pendingTokens <= BigInt(0)
+        ? 'No pending tokens to claim'
+        : 'Connect your wallet to claim';
+
+  const refundDisabledReason = !saleEnded
+    ? 'Sale not finished — refunds available only after sale ends'
+    : softCapReached === true
+      ? 'Soft cap reached — refunds disabled'
+      : contributions <= BigInt(0)
+        ? 'No contribution found for this wallet'
+        : 'Connect your wallet to request refund';
+
   /* ---------- Small UI subcomponents ---------- */
 
   function StatCard({ title, loading, children }: { title: React.ReactNode; loading?: boolean; children: React.ReactNode }) {
@@ -413,9 +490,6 @@ export default function PresaleDashboard(): JSX.Element {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <ConnectButton showBalance={false} />
-        </div>
       </header>
 
       {/* Top summary - improved UX */}
@@ -561,7 +635,7 @@ export default function PresaleDashboard(): JSX.Element {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
               <label className="block text-xs text-slate-600 mb-1">ETH amount</label>
               <input
@@ -601,22 +675,27 @@ export default function PresaleDashboard(): JSX.Element {
               </div>
             </div>
 
-            <div>
-              <button
-                onClick={onBuy}
-                disabled={!clientAddress || buying || isAnyLoading || !hasActive}
-                className={`w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 font-medium transition ${!clientAddress || buying || isAnyLoading || !hasActive ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                aria-busy={buying}
-                title={buying ? 'Processing purchase' : (!hasActive ? 'No active phase' : 'Buy tokens')}
-              >
-                {buying ? (<><Spinner size={16} /><span>Buying…</span></>) : 'Buy'}
-              </button>
-              <div className="mt-2 text-xs">
-                {!hasActive ? (
-                  <div className="text-rose-600">No active phase — purchases disabled</div>
-                ) : (
-                  <div className="text-slate-500">{connectedHint}</div>
-                )}
+            <div className="flex mt-5">
+              {/* contenedor del botón — ocupa todo el ancho de la columna */}
+              <div className="w-full">
+                <button
+                  onClick={onBuy}
+                  disabled={!clientAddress || buying || isAnyLoading || !canBuy}
+                  className={`w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 font-medium transition ${!clientAddress || buying || isAnyLoading || !canBuy ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                  aria-busy={buying}
+                  title={buying ? 'Processing purchase' : (!canBuy ? buyDisabledReason : 'Buy tokens')}
+                >
+                  {buying ? (<><Spinner size={16} /><span>Buying…</span></>) : 'Buy'}
+                </button>
+                <div className="mt-2 text-xs">
+                  {!hasActive ? (
+                    <div className="text-rose-600">No active phase — purchases disabled</div>
+                  ) : remainingTokens <= BigInt(0) ? (
+                    <div className="text-rose-600">No tokens remaining in current phase</div>
+                  ) : (
+                    <div className="text-slate-500">{connectedHint}</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -645,24 +724,29 @@ export default function PresaleDashboard(): JSX.Element {
 
             <div className="flex gap-2 mt-3">
               <button
-                className={`flex-1 rounded-md px-3 py-2 font-medium ${!clientAddress || claiming ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                className={`flex-1 rounded-md px-3 py-2 font-medium ${!clientAddress || claiming || !canClaim ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
                 onClick={onClaim}
-                disabled={!clientAddress || claiming}
+                disabled={!clientAddress || claiming || !canClaim}
                 aria-busy={claiming}
-                title={!mounted ? 'Connect wallet to claim' : !clientAddress ? 'Connect wallet to claim' : 'Claim your tokens'}
+                title={!mounted ? 'Connect wallet to claim' : (!canClaim ? claimDisabledReason : 'Claim your tokens')}
               >
                 {claiming ? (<><Spinner size={14} /> Claiming…</>) : 'Claim'}
               </button>
 
               <button
-                className={`flex-1 rounded-md px-3 py-2 font-medium ${!clientAddress || requestingRefund ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700'}`}
+                className={`flex-1 rounded-md px-3 py-2 font-medium ${!clientAddress || requestingRefund || !canRequestRefund ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700'}`}
                 onClick={onRequestRefund}
-                disabled={!clientAddress || requestingRefund}
+                disabled={!clientAddress || requestingRefund || !canRequestRefund}
                 aria-busy={requestingRefund}
-                title={!mounted ? 'Connect wallet to request refund' : !clientAddress ? 'Connect wallet to request refund' : 'Request a refund'}
+                title={!mounted ? 'Connect wallet to request refund' : (!canRequestRefund ? refundDisabledReason : 'Request a refund')}
               >
                 {requestingRefund ? (<><Spinner size={14} /> Requesting…</>) : 'Request refund'}
               </button>
+            </div>
+
+            <div className="mt-3 text-xs text-slate-500">
+              <p><strong>Claim</strong>: retrieve the tokens you purchased. Available only after the sale ends and the soft cap was reached.</p>
+              <p className="mt-1"><strong>Request refund</strong>: ask for your ETH back if the sale ended and the soft cap was not reached. Refunds are processed on-chain.</p>
             </div>
           </div>
         </div>

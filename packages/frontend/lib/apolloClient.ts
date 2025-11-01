@@ -1,4 +1,3 @@
-// packages/frontend/lib/apolloClient.ts
 import { ApolloClient, InMemoryCache, HttpLink } from '@apollo/client';
 
 const SUBGRAPH = process.env.NEXT_PUBLIC_SUBGRAPH_URL ?? '';

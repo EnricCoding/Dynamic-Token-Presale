@@ -15,7 +15,6 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
-    /// @notice Emitted when admin performs an emergency burn from an account
     event EmergencyBurn(address indexed from, uint256 amount, address indexed admin);
 
     /// @notice Constructor sets name, symbol, cap and initial admin
@@ -27,8 +26,6 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         string memory symbol_,
         uint256 cap_
     ) ERC20(name_, symbol_) ERC20Capped(cap_) {
-        // ERC20Capped's constructor already requires cap_ > 0 (OpenZeppelin).
-        // Keep logic explicit.
         require(cap_ > 0, "MyToken: cap is 0");
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -37,9 +34,6 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         _grantRole(BURNER_ROLE, msg.sender);
     }
 
-    /// @notice Mint new tokens to an address. Only accounts with MINTER_ROLE can mint.
-    /// @param to Address to mint tokens to
-    /// @param amount Amount of tokens to mint (in base units)
     function mint(
         address to,
         uint256 amount
@@ -49,29 +43,19 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         _mint(to, amount);
     }
 
-    /// @notice Pause all token transfers and minting. Only accounts with PAUSER_ROLE can pause.
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    /// @notice Unpause token transfers and minting. Only accounts with PAUSER_ROLE can unpause.
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
-    /// @notice Burn tokens from caller (inherited from ERC20Burnable).
-    /// @dev keep default ERC20Burnable.burn semantics
-
-    /// @notice Allow addresses with BURNER_ROLE to burn tokens from an address without allowance checks.
-    /// @dev This is an admin-style burn for operators with the role.
     function burnFromByRole(address from, uint256 amount) external onlyRole(BURNER_ROLE) {
         require(from != address(0), "MyToken: burn from zero address");
         _burn(from, amount);
     }
 
-    /// @notice Emergency burn function for admin. Only DEFAULT_ADMIN_ROLE.
-    /// @param from Address to burn from
-    /// @param amount Amount to burn
     function emergencyBurn(
         address from,
         uint256 amount
@@ -81,7 +65,6 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         emit EmergencyBurn(from, amount, msg.sender);
     }
 
-    /// @dev Override _update to respect pause state (OpenZeppelin v5)
     function _update(
         address from,
         address to,
@@ -90,7 +73,6 @@ contract MyToken is ERC20, ERC20Burnable, ERC20Capped, Pausable, AccessControl {
         super._update(from, to, value);
     }
 
-    /// @dev Required override for AccessControl (ERC165)
     function supportsInterface(
         bytes4 interfaceId
     ) public view virtual override(AccessControl) returns (bool) {

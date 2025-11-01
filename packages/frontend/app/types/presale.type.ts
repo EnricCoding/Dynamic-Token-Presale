@@ -1,4 +1,3 @@
-// packages/frontend/hooks/presale.types.ts
 export type TxHash = `0x${string}`;
 
 export interface Phase {
@@ -6,8 +5,8 @@ export interface Phase {
   priceWei: bigint;
   supply: bigint;
   sold: bigint;
-  start: number; // unix seconds
-  end: number;   // unix seconds
+  start: number; 
+  end: number;   
 }
 
 export interface CalcResult {

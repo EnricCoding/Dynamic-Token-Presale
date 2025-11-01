@@ -1,4 +1,3 @@
-// packages/frontend/app/hooks/usePresaleRead.ts
 import { useCallback, useMemo, useRef } from "react";
 import type { Address } from "viem";
 import { parseAbi } from "viem";
@@ -7,9 +6,6 @@ import { DYNAMIC_PRESALE_ADDRESS } from "@/lib/addresses";
 import { DynamicPresaleABI } from "@/lib/abi";
 import type { CalcResult, Phase } from "../types/presale.type";
 
-/**
- * Helpers
- */
 function toBigIntSafe(v: unknown): bigint {
   try {
     return BigInt(String(v));
@@ -37,7 +33,6 @@ function normalizePhaseResponse(res: unknown) {
       const obj = res as Record<string, unknown>;
       const k = String(key);
       if (Object.prototype.hasOwnProperty.call(obj, k)) return obj[k];
-      // array-like fallback
       const arr = res as ArrayLike<unknown>;
       if (
         arr &&
@@ -77,16 +72,9 @@ function normalizePhaseResponse(res: unknown) {
   };
 }
 
-/**
- * Hook: usePresaleRead
- *
- * - All React hooks are called unconditionally and in stable order.
- * - Functions themselves check `isServer` at runtime and throw clear errors if called server-side.
- */
 export function usePresaleRead() {
   const isServer = typeof window === "undefined";
 
-  // Hooks called in stable order (no conditional hooks) to satisfy eslint react-hooks rules:
   const publicClient = usePublicClient();
 
   const parsedAbi = useMemo(() => {
@@ -100,39 +88,19 @@ export function usePresaleRead() {
       }
       return DynamicPresaleABI;
     } catch (err) {
-      // Keep parse failure loud
-      console.error("[usePresaleRead] parseAbi error:", err);
       throw err;
     }
-    // note: DynamicPresaleABI is static; no deps required
   }, []);
 
   const initLoggedRef = useRef(false);
   if (!initLoggedRef.current) {
     initLoggedRef.current = true;
-    console.info("[usePresaleRead] init:", {
-      hasPublicClient: !!publicClient,
-      isClientEnv: !isServer,
-      contractAddress: DYNAMIC_PRESALE_ADDRESS,
-      parsedAbiType: Array.isArray(parsedAbi)
-        ? `array(${parsedAbi.length})`
-        : typeof parsedAbi,
-    });
     if (isServer) {
-      console.warn(
-        "[usePresaleRead] running on SERVER. Ensure caller is a client component (add 'use client')."
-      );
     }
   }
 
   const address = DYNAMIC_PRESALE_ADDRESS as Address;
 
-  /**
-   * readRaw — always defined (useCallback called unconditionally)
-   * It checks isServer at runtime and throws if used in server context.
-   *
-   * opts.suppressLog: when true, do not print console.error on contract reverts.
-   */
   const readRaw = useCallback(
     async (
       functionName: string,
@@ -145,7 +113,6 @@ export function usePresaleRead() {
         );
       }
 
-      // small args preview for logs
       const argsPreview = (args ?? []).map((a) => {
         try {
           if (typeof a === "bigint") return a.toString();
@@ -156,14 +123,6 @@ export function usePresaleRead() {
         }
       });
 
-      if (!opts?.suppressLog) {
-        console.debug(`[usePresaleRead] readRaw -> calling ${functionName}`, {
-          address,
-          args: argsPreview,
-        });
-      }
-
-      // typed wrapper for publicClient.readContract
       const pc = publicClient as unknown as {
         readContract: (params: {
           address: Address;
@@ -180,20 +139,8 @@ export function usePresaleRead() {
           functionName: functionName as unknown,
           args: args ?? [],
         });
-        if (!opts?.suppressLog) {
-          console.debug(`[usePresaleRead] readRaw -> success ${functionName}`);
-        }
         return res;
       } catch (err) {
-        // Log unless caller explicitly asked to suppress logs (expected revert)
-        if (!opts?.suppressLog) {
-          console.error(`[usePresaleRead] readRaw -> error ${functionName}`, {
-            functionName,
-            args: argsPreview,
-            error: String(err),
-          });
-        }
-        // Still throw so callers that expect errors can handle them
         throw new Error(
           `usePresaleRead.readRaw: failed calling ${functionName} (${String(
             (err as Error).message ?? err
@@ -204,7 +151,6 @@ export function usePresaleRead() {
     [publicClient, parsedAbi, address, isServer]
   );
 
-  // All reader callbacks — defined unconditionally (stable hook order)
   const getTotalPhases = useCallback(async (): Promise<number> => {
     const res = await readRaw("totalPhases");
     const num = toNumberSafe(res, "totalPhases");
@@ -317,16 +263,11 @@ export function usePresaleRead() {
     return Boolean(res as unknown as boolean);
   }, [readRaw]);
 
-  /**
-   * getCurrentPhaseSafe — this call may revert if no phase active.
-   * We call readRaw with suppressLog = true to avoid noisy console.error on expected revert.
-   */
   const getCurrentPhaseSafe = useCallback(async (): Promise<number | null> => {
     try {
       const res = await readRaw("getCurrentPhase", [], { suppressLog: true });
       return toNumberSafe(res, "currentPhase");
     } catch {
-      // expected: contract may revert when no active phase — return null silently
       return null;
     }
   }, [readRaw]);
@@ -364,7 +305,6 @@ export function usePresaleRead() {
     return toBigIntSafe(res);
   }, [readRaw]);
 
-  // export all readers
   return {
     getTotalPhases,
     getPhase,

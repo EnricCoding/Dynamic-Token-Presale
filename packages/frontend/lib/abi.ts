@@ -1,4 +1,3 @@
-// packages/frontend/lib/abi.ts
 import { parseAbi } from "viem";
 
 export const DynamicPresaleABI = [
@@ -33,12 +32,10 @@ export const DynamicPresaleABI = [
   "function unpause()",
 ] as const;
 
-// Parsed ABI for viem (do it once)
 export const DynamicPresaleAbiParsed = parseAbi(
   DynamicPresaleABI as readonly string[]
 );
 
-/* token abi */
 export const MyTokenABI = [
   "function decimals() view returns (uint8)",
   "function balanceOf(address) view returns (uint256)",

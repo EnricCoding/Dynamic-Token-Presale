@@ -1,8 +1,6 @@
-// packages/frontend/lib/addresses.ts
 export const DYNAMIC_PRESALE_ADDRESS = "0x7878dBCFd713b76b1De6F0812fEC9c6c2b8d55Bc";
 export const MY_TOKEN_ADDRESS = "0x4B0056348e71722Ee0bF6466D278102aF2165F1E";
 export const TOKEN_VESTING_ADDRESS = "0x626Cb432AcE64ED61Fe246021Afb2630F2BEe3D9";
 
-// token decimals (from deployment)
 export const TOKEN_DECIMALS = 18;
 export const TOKEN_UNIT: bigint = BigInt(10) ** BigInt(TOKEN_DECIMALS);

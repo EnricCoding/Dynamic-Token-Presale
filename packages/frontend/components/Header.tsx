@@ -7,7 +7,6 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 const NAV_LINKS = [
   { href: "/presale", label: "Presale" },
-  { href: "/vesting", label: "Vesting" },
 ];
 
 export default function Header(): JSX.Element {
@@ -17,7 +16,6 @@ export default function Header(): JSX.Element {
   return (
     <header className="bg-white/60 backdrop-blur-sm border-b border-slate-200 shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Left: logo + nav */}
         <div className="flex items-center gap-4">
           <Link
             href="/"
@@ -44,7 +42,6 @@ export default function Header(): JSX.Element {
             </div>
           </Link>
 
-          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-4 ml-6">
             {NAV_LINKS.map((l) => {
               const active = pathname === l.href;
@@ -53,27 +50,17 @@ export default function Header(): JSX.Element {
                   key={l.href}
                   href={l.href}
                   className={`text-sm px-3 py-2 rounded-md transition-colors ${active
-                      ? "bg-slate-100 text-slate-900 font-medium shadow-sm"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    ? "bg-slate-100 text-slate-900 font-medium shadow-sm"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                 >
                   {l.label}
                 </Link>
               );
             })}
-
-            <a
-              href="https://thegraph.com/studio/subgraph/dynamic-presale-subgraph/"
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm px-3 py-2 rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            >
-              Subgraph
-            </a>
           </nav>
         </div>
 
-        {/* Right: connect & mobile menu */}
         <div className="flex items-center gap-3">
           <div className="hidden md:block">
             <div className="rounded-xl px-2 py-1">
@@ -81,7 +68,6 @@ export default function Header(): JSX.Element {
             </div>
           </div>
 
-          {/* Mobile menu button */}
           <button
             type="button"
             aria-expanded={open}
@@ -102,7 +88,6 @@ export default function Header(): JSX.Element {
         </div>
       </div>
 
-      {/* Mobile panel */}
       <div
         className={`md:hidden transition-[max-height,opacity] duration-200 ease-out overflow-hidden ${open ? "max-h-60 opacity-100" : "max-h-0 opacity-0"
           }`}
@@ -117,23 +102,14 @@ export default function Header(): JSX.Element {
                 href={l.href}
                 onClick={() => setOpen(false)}
                 className={`block text-sm px-3 py-2 rounded-md transition-colors ${active
-                    ? "bg-slate-100 text-slate-900 font-medium"
-                    : "text-slate-700 hover:bg-slate-50"
+                  ? "bg-slate-100 text-slate-900 font-medium"
+                  : "text-slate-700 hover:bg-slate-50"
                   }`}
               >
                 {l.label}
               </Link>
             );
           })}
-
-          <a
-            href="https://thegraph.com/studio/subgraph/dynamic-presale-subgraph/"
-            target="_blank"
-            rel="noreferrer"
-            className="block text-sm px-3 py-2 rounded-md text-slate-700 hover:bg-slate-50"
-          >
-            Subgraph
-          </a>
 
           <div className="pt-2">
             <ConnectButton showBalance={false} />

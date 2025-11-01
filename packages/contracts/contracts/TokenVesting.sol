@@ -25,11 +25,10 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
 
     IERC20 public immutable token;
 
-    // Counters / bookkeeping
     uint256 public totalVestingSchedules;
-    uint256 public totalCommitted; // tokens reserved (not yet distributed) across all schedules
+    uint256 public totalCommitted; 
     mapping(address => VestingSchedule[]) private schedules;
-    mapping(address => uint256) public totalVestedAmount; // total remaining committed tokens per beneficiary (not yet released)
+    mapping(address => uint256) public totalVestedAmount; 
 
     event VestingCreated(
         address indexed beneficiary,
@@ -83,7 +82,6 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
         require(cliff <= duration, "Vesting: cliff greater than duration");
         require(start >= block.timestamp, "Vesting: start time in past");
 
-        // Ensure contract has enough tokens for this new vesting (considering previously committed)
         require(
             token.balanceOf(address(this)) >= totalCommitted + totalAmount,
             "Vesting: insufficient token balance for new vesting"
@@ -138,12 +136,9 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
                 continue;
             }
 
-            // Update schedule and global counters BEFORE transfer (CEI)
             schedule.released += unreleased;
             totalReleasable += unreleased;
 
-            // bookkeeping: reduce committed and per-beneficiary committed
-            // totalCommitted represented tokens not yet distributed, so subtract released now
             if (totalCommitted >= unreleased) {
                 totalCommitted -= unreleased;
             } else {
@@ -181,7 +176,6 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
         require(vested > schedule.released, "Vesting: nothing to release");
         uint256 unreleased = vested - schedule.released;
 
-        // Update accounting (CEI)
         schedule.released += unreleased;
 
         if (totalCommitted >= unreleased) {
@@ -214,7 +208,6 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
             return schedule.totalAmount;
         } else {
             uint256 elapsed = block.timestamp - schedule.start;
-            // Compute safely: avoid large multiplication before division
             uint256 part1 = schedule.totalAmount / schedule.duration;
             uint256 part2 = schedule.totalAmount % schedule.duration;
             return part1 * elapsed + (part2 * elapsed) / schedule.duration;
@@ -246,25 +239,22 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
         uint256 unvested = 0;
         if (schedule.totalAmount > vested) {
             unvested = schedule.totalAmount - vested;
-        } // else 0
+        } 
 
         schedule.revoked = true;
 
-        // Reduce total committed by the unvested portion (released portion already reduced on release)
         if (totalCommitted >= unvested) {
             totalCommitted -= unvested;
         } else {
             totalCommitted = 0;
         }
 
-        // Reduce per-beneficiary committed by unvested
         if (totalVestedAmount[beneficiary] >= unvested) {
             totalVestedAmount[beneficiary] -= unvested;
         } else {
             totalVestedAmount[beneficiary] = 0;
         }
 
-        // Return the unvested tokens to owner (admin)
         if (unvested > 0) {
             token.safeTransfer(owner(), unvested);
         }
@@ -276,8 +266,6 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
     // Admin utilities
     // -------------------------
 
-    /// @notice Emergency withdraw tokens. Only owner.
-    /// @param amount Amount to withdraw
     function emergencyWithdraw(uint256 amount) external onlyOwner {
         require(
             amount <= token.balanceOf(address(this)),
@@ -286,12 +274,10 @@ contract TokenVesting is Ownable, ReentrancyGuard, Pausable {
         token.safeTransfer(owner(), amount);
     }
 
-    /// @notice Pause vesting operations. Only owner.
     function pause() external onlyOwner {
         _pause();
     }
 
-    /// @notice Unpause vesting operations. Only owner.
     function unpause() external onlyOwner {
         _unpause();
     }

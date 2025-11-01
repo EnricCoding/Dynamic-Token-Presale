@@ -1,0 +1,22 @@
+enric@EnricRobert MINGW64 ~/Desktop/formacion/blockchain/dynamic-presale/packages/contracts (main)
+$ npx ts-node scripts/activatePhase.ts --action add --price 0.0005 --supply 1000000 --duration 604800
+CONFIG {
+  rpc: 'https://eth-sepolia.g.alchemy.com/v2/MRuRETEazvquYTcugpv40',
+  contract: '0x7878dBCFd713b76b1De6F0812fEC9c6c2b8d55Bc',
+  action: 'add',
+  phaseId: 0,
+  priceWei: '500000000000000',
+  supplyUnits: '1000000000000000000000000',
+  startTs: 1761850104,
+  endTs: 1762454904,
+  force: false
+}
+Contract owner: 0x4D98065935Bf2181703af7dC6be47fA44bEa881b
+Deployer key matches contract owner — OK to proceed.
+totalPhases: 3
+lastPhase.end: 1760392358
+Tx submitted: 0x7f1c4eba07a04a00e289be6d3696496ccdf39c41aa41bb5c8e080521040c43c6
+Tx mined. status: 1
+getCurrentPhase -> null / revert
+getPhase(0) -> priceWei:500000000000000, supply:100000000000000000000000, sold:0, start:1760380958, end:1760384558
+Done.

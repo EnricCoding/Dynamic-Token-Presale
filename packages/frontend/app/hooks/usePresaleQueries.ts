@@ -1,4 +1,3 @@
-// packages/frontend/app/hooks/usePresaleQueries.ts
 import { useMemo } from "react";
 import { useQuery, UseQueryOptions } from "@tanstack/react-query";
 import type { Address } from "viem";
@@ -7,9 +6,6 @@ import { useAccount } from "wagmi";
 import { usePresaleRead } from "./usePresaleRead";
 import type { Phase, CalcResult } from "../types/presale.type";
 
-/**
- * Query key helpers
- */
 export const PRESALE_KEYS = {
   all: ["presale"] as const,
   totalPhases: () => [...PRESALE_KEYS.all, "totalPhases"] as const,
@@ -37,16 +33,7 @@ export const PRESALE_KEYS = {
     ["user", address, "pendingTokens"] as const,
 };
 
-/**
- * Convenience generic for useQuery options in this module
- *
- * UseQueryOptions<QueryFnData, Error, TData>
- */
 type QO<T> = UseQueryOptions<T, Error, T>;
-
-/* -------------------------
-   Presale query hooks
-   ------------------------- */
 
 export function useTotalPhases(options?: QO<number>) {
   const { getTotalPhases } = usePresaleRead();
@@ -58,10 +45,6 @@ export function useTotalPhases(options?: QO<number>) {
   });
 }
 
-/**
- * Fetch all phases in one query.
- * Note: this runs getTotalPhases then parallel getPhase(i).
- */
 export function useAllPhases(options?: QO<Phase[]>) {
   const { getTotalPhases, getPhase } = usePresaleRead();
   return useQuery<Phase[], Error>({
@@ -168,10 +151,6 @@ export function useSaleEnded(options?: QO<boolean>) {
   });
 }
 
-/* -------------------------
-   Extra getters useful for product/UI
-   ------------------------- */
-
 export function useSoftCap(options?: QO<bigint>) {
   const { getSoftCap } = usePresaleRead();
   return useQuery<bigint, Error>({
@@ -222,10 +201,6 @@ export function useHasActivePhase(options?: QO<boolean>) {
   });
 }
 
-/**
- * getCurrentPhase (safe)
- * returns number | null — useful to render "no active phase" without throwing.
- */
 export function useCurrentPhase(options?: QO<number | null>) {
   const { getCurrentPhaseSafe } = usePresaleRead();
   return useQuery<number | null, Error>({
@@ -256,13 +231,8 @@ export function useOwner(options?: QO<Address>) {
   });
 }
 
-/* -------------------------
-   User-scoped queries
-   ------------------------- */
-
 export function useMyContributions(options?: QO<bigint>) {
   const { address } = useAccount();
-  // address from wagmi useAccount is string | undefined
   return useContributionsOf(address ?? null, options);
 }
 
@@ -309,9 +279,6 @@ export function usePendingTokensOf(
   });
 }
 
-/**
- * Convenience aggregated snapshot for a dashboard
- */
 export function usePresaleDashboardSnapshot() {
   const totalRaised = useTotalRaised();
   const totalTokensSold = useTotalTokensSold();

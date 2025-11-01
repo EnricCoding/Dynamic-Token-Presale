@@ -1,4 +1,3 @@
-// packages/frontend/lib/presetGraphQueries.ts
 import { gql } from "@apollo/client";
 
 export const PRESALE_STATS_QUERY = gql`

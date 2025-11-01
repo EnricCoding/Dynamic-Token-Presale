@@ -28,28 +28,25 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
 
     IMyToken public immutable token;
     uint8 public immutable tokenDecimals;
-    uint256 public immutable tokenUnit; // 10 ** tokenDecimals
+    uint256 public immutable tokenUnit;
 
-    // configurable sale parameters (owner-settable)
-    uint256 public softCap;      // wei
-    uint256 public minBuy;       // wei
-    uint256 public maxPerWallet; // wei
+    uint256 public softCap;     
+    uint256 public minBuy;      
+    uint256 public maxPerWallet; 
 
     Phase[] public phases;
 
-    uint256 public totalRaised;     // wei accepted (costs accepted)
-    uint256 public totalTokensSold; // token units sold
+    uint256 public totalRaised;    
+    uint256 public totalTokensSold; 
     bool public saleEnded;
     bool public softCapReached;
 
-    mapping(address => uint256) public contributionsWei; // wei accepted per buyer
-    mapping(address => uint256) public pendingTokens;    // token units pending to be claimed
+    mapping(address => uint256) public contributionsWei;
+    mapping(address => uint256) public pendingTokens;   
     EnumerableSet.AddressSet private buyers;
 
-    // local escrow (pull-payment) mapping: recipient => wei pending
     mapping(address => uint256) private _escrowPayments;
 
-    // Sum of all escrowed wei pending (keeps invariant to protect funds)
     uint256 public totalEscrow;
 
     event Purchased(address indexed buyer, uint256 indexed phaseId, uint256 ethAmount, uint256 tokensAmount);
@@ -67,8 +64,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         _;
     }
 
-    /// @notice Constructor sets token, decimals and initial sale params
-    /// NOTE: Ownable requires an initial owner parameter in OZ v5, por eso pasamos msg.sender.
     constructor(
         address token_,
         uint8 tokenDecimals_,
@@ -88,11 +83,11 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         minBuy = minBuy_;
         maxPerWallet = maxPerWallet_;
     }
+
     // -------------------------
     // Pull-payment (local)
     // -------------------------
 
-    /// @notice Internal helper to queue a payment for `dest` (pull pattern)
     function _asyncTransfer(address dest, uint256 amount) internal {
         require(dest != address(0), "Presale: dest zero");
         require(amount > 0, "Presale: zero amount");
@@ -101,12 +96,10 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         emit PaymentQueued(dest, amount);
     }
 
-    /// @notice Withdraw pending payments (excess/refund). Uses pull-pattern.
     function withdrawPayments() external nonReentrant {
         uint256 payment = _escrowPayments[msg.sender];
         require(payment > 0, "Presale: no payments");
 
-        // Effects (CEI)
         _escrowPayments[msg.sender] = 0;
         if (totalEscrow >= payment) {
             totalEscrow -= payment;
@@ -114,17 +107,14 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
             totalEscrow = 0;
         }
 
-        // Use Address.sendValue to forward all gas and be compatible with smart contract wallets
         Address.sendValue(payable(msg.sender), payment);
         emit PaymentsWithdrawn(msg.sender, payment);
     }
 
-    /// @notice View pending payments for an account
     function paymentsOf(address account) external view returns (uint256) {
         return _escrowPayments[account];
     }
 
-    /// @notice Returns the total escrowed ETH reserved for buyer withdrawals
     function escrowBalance() external view returns (uint256) {
         return totalEscrow;
     }
@@ -133,14 +123,12 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
     // Phase management
     // -------------------------
 
-    /// @notice Add a new phase. Only owner can add.
     function addPhase(uint256 priceWei, uint256 supply, uint256 start, uint256 end) external onlyOwner {
         require(priceWei > 0, "Presale: price must be greater than 0");
         require(supply > 0, "Presale: supply must be greater than 0");
         require(start < end, "Presale: invalid phase time");
         require(start > block.timestamp, "Presale: start time must be in future");
 
-        // Disallow overlapping phases
         for (uint256 i = 0; i < phases.length; i++) {
             require(start >= phases[i].end || end <= phases[i].start, "Presale: overlapping phases");
         }
@@ -149,14 +137,12 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         emit PhaseAdded(phases.length - 1, priceWei, supply, start, end);
     }
 
-    /// @notice Update phase times for a future (not-yet-started) phase
     function updatePhase(uint256 phaseId, uint256 newStart, uint256 newEnd) external onlyOwner {
         require(phaseId < phases.length, "Presale: invalid phase ID");
         require(newStart < newEnd, "Presale: invalid phase time");
         Phase storage phase = phases[phaseId];
         require(block.timestamp < phase.start, "Presale: cannot update active/past phase");
 
-        // Ensure no overlap with other phases
         for (uint256 i = 0; i < phases.length; i++) {
             if (i == phaseId) continue;
             require(newStart >= phases[i].end || newEnd <= phases[i].start, "Presale: overlapping phases");
@@ -166,7 +152,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         phase.end = newEnd;
     }
 
-    /// @notice Pause a specific phase by setting its end time to now (emergency)
     function pausePhase(uint256 phaseId) external onlyOwner {
         require(phaseId < phases.length, "Presale: invalid phase ID");
         phases[phaseId].end = block.timestamp;
@@ -176,7 +161,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
     // Buy / Claim / Refund
     // -------------------------
 
-    /// @notice Internal: find active phase index if any (non-reverting)
     function _currentPhaseIndex() internal view returns (bool, uint256) {
         for (uint256 i = 0; i < phases.length; i++) {
             Phase storage p = phases[i];
@@ -187,7 +171,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         return (false, 0);
     }
 
-    /// @notice Buy tokens in current phase. Excess ETH will be queued for withdrawal via `withdrawPayments`.
     function buy() external payable nonReentrant whenNotPaused onlyWhileActive {
         require(msg.value >= minBuy, "Presale: below min buy");
 
@@ -196,7 +179,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
 
         Phase storage phase = phases[phaseId];
 
-        // Calculate tokens buyer can afford (in token units)
         uint256 tokensToBuy = (msg.value * tokenUnit) / phase.priceWei;
         require(tokensToBuy > 0, "Presale: zero tokens");
 
@@ -208,7 +190,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
 
         uint256 excess = msg.value - cost;
 
-        // Effects (CEI)
         phase.sold += tokensAllocated;
         totalRaised += cost;
         totalTokensSold += tokensAllocated;
@@ -216,7 +197,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         pendingTokens[msg.sender] += tokensAllocated;
         buyers.add(msg.sender);
 
-        // Handle excess via pull (escrow)
         if (excess > 0) {
             _asyncTransfer(msg.sender, excess);
         }
@@ -229,7 +209,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         }
     }
 
-    /// @notice Claim minted tokens after sale ended and soft cap reached
     function claim() external nonReentrant whenNotPaused {
         require(saleEnded, "Presale: sale not ended");
         require(softCapReached, "Presale: softCap not reached");
@@ -242,7 +221,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         emit Claimed(msg.sender, amount);
     }
 
-    /// @notice Request refund when sale ended and soft cap not reached
     function requestRefund() external nonReentrant whenNotPaused {
         require(saleEnded, "Presale: sale not ended");
         require(!softCapReached, "Presale: softCap reached");
@@ -253,7 +231,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         contributionsWei[msg.sender] = 0;
         pendingTokens[msg.sender] = 0;
 
-        // Queue refund via pull pattern
         _asyncTransfer(msg.sender, contributed);
         emit RefundRequested(msg.sender, contributed);
     }
@@ -262,32 +239,27 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
     // Admin actions
     // -------------------------
 
-    /// @notice Withdraw proceeds (ETH held in contract) to beneficiary. Only owner and only when softCapReached and saleEnded.
     function withdrawProceeds(address payable beneficiary) external onlyOwner nonReentrant {
         require(saleEnded, "Presale: sale not ended");
         require(softCapReached, "Presale: softCap not reached");
 
         uint256 currentBalance = address(this).balance;
-        // Do not withdraw funds that are reserved for escrow/refunds
         require(currentBalance > totalEscrow, "Presale: nothing withdrawable (reserved escrow)");
         uint256 withdrawable = currentBalance - totalEscrow;
         Address.sendValue(beneficiary, withdrawable);
         emit Withdrawn(beneficiary, withdrawable);
     }
 
-    /// @notice End the sale. Only owner.
     function endSale() external onlyOwner {
         require(!saleEnded, "Presale: already ended");
         saleEnded = true;
         emit SaleEnded(softCapReached);
     }
 
-    /// @notice Pause the presale (global). Only owner.
     function pause() external onlyOwner {
         _pause();
     }
 
-    /// @notice Unpause the presale (global). Only owner.
     function unpause() external onlyOwner {
         _unpause();
     }
@@ -296,7 +268,6 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
     // View / helpers
     // -------------------------
 
-    /// @notice Reverting current phase getter (keeps backward compatibility)
     function getCurrentPhase() public view returns (uint256) {
         for (uint256 i = 0; i < phases.length; i++) {
             if (block.timestamp >= phases[i].start && block.timestamp <= phases[i].end) {
@@ -306,24 +277,20 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         revert("Presale: no active phase");
     }
 
-    /// @notice Returns whether there is an active phase
     function hasActivePhase() external view returns (bool) {
         (bool found, ) = _currentPhaseIndex();
         return found;
     }
 
-    /// @notice Get phase details
     function getPhase(uint256 phaseId) external view returns (Phase memory) {
         require(phaseId < phases.length, "Presale: invalid phase ID");
         return phases[phaseId];
     }
 
-    /// @notice Total number of configured phases
     function totalPhases() external view returns (uint256) {
         return phases.length;
     }
 
-    /// @notice Calculate tokens + cost + excess if buying `ethAmount` in current phase (safe, non-reverting)
     function calculateTokens(uint256 ethAmount) external view returns (uint256 tokens, uint256 cost, uint256 excess) {
         (bool found, uint256 phaseId) = _currentPhaseIndex();
         if (!found) return (0, 0, ethAmount);
@@ -338,14 +305,12 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
         return (tokensAllocated, cost, excess);
     }
 
-    /// @notice Remaining tokens in current phase (0 if none)
     function remainingTokensInCurrentPhase() external view returns (uint256) {
         (bool found, uint256 idx) = _currentPhaseIndex();
         if (!found) return 0;
         return phases[idx].supply - phases[idx].sold;
     }
 
-    /// @notice Number of buyers (addresses) who participated
     function totalBuyers() external view returns (uint256) {
         return buyers.length();
     }
@@ -354,26 +319,22 @@ contract DynamicPresale is ReentrancyGuard, Pausable, Ownable {
     // Admin setters (optional, owner-only)
     // -------------------------
 
-    /// @notice Set soft cap (only until reached)
     function setSoftCap(uint256 newSoftCap) external onlyOwner {
         require(newSoftCap > 0, "Presale: softCap > 0");
         require(!softCapReached, "Presale: softCap already reached");
         softCap = newSoftCap;
     }
 
-    /// @notice Set min buy
     function setMinBuy(uint256 newMinBuy) external onlyOwner {
         require(newMinBuy > 0, "Presale: minBuy > 0");
         require(newMinBuy <= maxPerWallet, "Presale: minBuy <= maxPerWallet");
         minBuy = newMinBuy;
     }
 
-    /// @notice Set max per wallet
     function setMaxPerWallet(uint256 newMaxPerWallet) external onlyOwner {
         require(newMaxPerWallet >= minBuy, "Presale: maxPerWallet >= minBuy");
         maxPerWallet = newMaxPerWallet;
     }
 
-    // Allow contract to receive ETH (for example direct transfers)
     receive() external payable {}
 }
